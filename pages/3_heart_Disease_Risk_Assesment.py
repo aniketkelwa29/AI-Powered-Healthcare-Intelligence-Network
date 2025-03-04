@@ -24,7 +24,7 @@ with open('models/third_feature_models/cbe_encoder.pkl', 'rb') as encoder_file:
 data = pd.read_csv('models/third_feature_models/brfss2022_data_wrangling_output.zip', compression='zip')
 data['heart_disease'] = data['heart_disease'].apply(lambda x: 1 if x == 'yes' else 0).astype('int')
 
-icon = Image.open("utils\\heart_disease.jpg")
+icon = Image.open("utils/heart_disease.jpg")
 st.set_page_config(layout='wide', page_title='AI-Powered Heart Disease Assessment', page_icon=icon)
 
 # Custom CSS
@@ -32,7 +32,7 @@ def local_css(file_name):
     with open(file_name) as f:
         st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
-local_css("utils\\style_v1.css")
+local_css("utils/style_v1.css")
 
 # Main layout with three columns
 row0_0, row0_1, row0_2, row0_3 = st.columns((0.08, 6, 3, 0.17))
