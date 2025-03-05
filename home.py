@@ -92,13 +92,13 @@ st.markdown("""
 # Sidebar Navigation
 st.sidebar.markdown("<h2 style='color: #ffffff;'>📌 Navigation</h2>", unsafe_allow_html=True)
 st.sidebar.markdown("<p class='sidebar-text'>Use the sidebar to explore different features of the AI Healthcare Network.</p>", unsafe_allow_html=True)
-st.sidebar.image("utils\\ph3.png", use_container_width=True)
+st.sidebar.image("utils/ph3.png", use_container_width=True)
 
 # Main Content
 st.markdown("<div class='title'>🩺 AI-Powered Healthcare Intelligence Network</div>", unsafe_allow_html=True)
 st.markdown("<div class='subtitle'>Transforming Healthcare with AI-driven Predictions & Insights</div>", unsafe_allow_html=True)
 
-st.image("utils\\ph1.png", use_container_width=True)
+st.image("utils/ph1.png", use_container_width=True)
 
 # Features Section
 st.markdown("<h2 style='text-align: center; color: #ffffff;'>✨ Features</h2>", unsafe_allow_html=True)

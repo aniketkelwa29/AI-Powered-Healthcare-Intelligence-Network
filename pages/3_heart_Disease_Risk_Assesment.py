@@ -27,7 +27,7 @@ data['heart_disease'] = data['heart_disease'].apply(lambda x: 1 if x == 'yes' el
 icon = Image.open("utils/heart_disease.jpg")
 st.set_page_config(layout='wide', page_title='AI-Powered Heart Disease Assessment', page_icon=icon)
 st.sidebar.markdown("<h2 style='color: #ffffff;'>📌  Description</h2>", unsafe_allow_html=True)
-st.sidebar.image("utils\\ph5.png", use_container_width=True)
+st.sidebar.image("utils/ph5.png", use_container_width=True)
 st.sidebar.markdown("<p class='sidebar-text'>This system analyzes health data, lifestyle, and medical history using AI and machine learning to predict heart disease risk and provide personalized recommendations for improving cardiovascular health.</p>", unsafe_allow_html=True)
 
 
