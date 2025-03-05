@@ -26,6 +26,10 @@ data['heart_disease'] = data['heart_disease'].apply(lambda x: 1 if x == 'yes' el
 
 icon = Image.open("utils/heart_disease.jpg")
 st.set_page_config(layout='wide', page_title='AI-Powered Heart Disease Assessment', page_icon=icon)
+st.sidebar.markdown("<h2 style='color: #ffffff;'>📌  Description</h2>", unsafe_allow_html=True)
+st.sidebar.image("utils\\ph5.png", use_container_width=True)
+st.sidebar.markdown("<p class='sidebar-text'>This system analyzes health data, lifestyle, and medical history using AI and machine learning to predict heart disease risk and provide personalized recommendations for improving cardiovascular health.</p>", unsafe_allow_html=True)
+
 
 # Custom CSS
 def local_css(file_name):
@@ -122,7 +126,7 @@ exercise_status = row6_3.selectbox("Have you exercised in the past 30 days?", ["
 
 with row6_1:
     st.write("#### Learn More")
-    st.markdown("[![](https://img.shields.io/badge/GitHub%20-Features%20Information-informational)](https://github.com/akthammomani/AI_powered_heart_disease_risk_assessment_app/tree/main/Notebooks/Exploratory_Data_Analysis/)")
+    st.markdown("[![](https://img.shields.io/badge/GitHub%20-Features%20Information-informational)](https://github.com/AbhaySingh71/AI-Powered-Healthcare-Intelligence-System/tree/main/heart_disease_risk_assessment)")
 
 # Collect input data
 input_data = {

@@ -15,6 +15,11 @@ from huggingface_hub import InferenceClient  # Fix for deprecated 'post' method
 load_dotenv(find_dotenv())
 nest_asyncio.apply()
 
+st.sidebar.markdown("<h2 style='color: #ffffff;'>📌 Description</h2>", unsafe_allow_html=True)
+st.sidebar.image("utils/ph2.png", use_container_width=True)
+st.sidebar.markdown("<p class='sidebar-text'>The LLM Medical Chatbot is an AI-powered assistant designed to provide instant, accurate, and reliable healthcare insights.</p>", unsafe_allow_html=True)
+
+
 # Ensure async loop is running
 try:
     asyncio.get_running_loop()
