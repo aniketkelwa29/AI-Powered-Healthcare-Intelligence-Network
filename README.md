@@ -3,7 +3,9 @@
 <p align="center">
   <strong>Revolutionizing Healthcare with AI-Driven Predictions, Recommendations, and Insights</strong>
   <br>
-  <img src="https://source.unsplash.com/800x400/?healthcare,ai" alt="Healthcare AI" width="600">
+ 
+  ![DALL·E 2025-03-06 19 27 45 - A high-tech AI-driven healthcare system banner  The image showcases an advanced medical dashboard with futuristic holographic displays for disease pre](https://github.com/user-attachments/assets/48ac86e6-51bd-40c4-8d96-638fafe9d4c6)
+
 </p>
 
 ---
