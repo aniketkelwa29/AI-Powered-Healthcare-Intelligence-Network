@@ -3,9 +3,8 @@
 <p align="center">
   <strong>Revolutionizing Healthcare with AI-Driven Predictions, Recommendations, and Insights</strong>
   <br>
- 
-  ![DALL·E 2025-03-06 19 27 45 - A high-tech AI-driven healthcare system banner  The image showcases an advanced medical dashboard with futuristic holographic displays for disease pre](https://github.com/user-attachments/assets/48ac86e6-51bd-40c4-8d96-638fafe9d4c6)
-
+  
+  ![DALL·E 2025-03-06 19 27 45 - A high-tech AI-driven healthcare system banner](https://github.com/user-attachments/assets/48ac86e6-51bd-40c4-8d96-638fafe9d4c6)
 </p>
 
 ---
@@ -23,60 +22,53 @@
 
 <h3>💡 Disease Prediction & Medical Recommendation</h3>
 <p>
-  This module uses **Machine Learning** to predict diseases based on symptoms and suggest the best medical recommendations.
+  This module uses <strong>Machine Learning</strong> to predict diseases based on symptoms and suggest the best medical recommendations.
 </p>
 <ul>
-  <li>✔️ Predicts diseases from given symptoms.</li>
-  <li>✔️ Uses **RandomForest Classifier** for predictions.</li>
-  <li>✔️ Provides recommended treatments and precautions.</li>
+  <li>✅ Predicts diseases from given symptoms.</li>
+  <li>✅ Uses <strong>RandomForest Classifier</strong> for predictions.</li>
+  <li>✅ Provides recommended treatments and precautions.</li>
 </ul>
-<table>
-  <tr>
-    <td><img src="utils/disease_prediction.png" alt="Disease Prediction" width="300"></td>
-  </tr>
-</table>
+
+  | ![Screenshot 1](utils/ph4.png) | ![Screenshot 2](utils/ph4.png) |
+
 
 <h3>💊 AI-Powered Drug Recommendation</h3>
 <p>
-  Our AI system uses **NLP & Cosine Similarity** to recommend alternative medicines based on drug properties.
+  Our AI system uses <strong>NLP & Cosine Similarity</strong> to recommend alternative medicines based on drug properties.
 </p>
 <ul>
-  <li>✔️ Matches medicines with similar ingredients.</li>
-  <li>✔️ Ensures safer and more effective drug prescriptions.</li>
+  <li>✅ Matches medicines with similar ingredients.</li>
+  <li>✅ Ensures safer and more effective drug prescriptions.</li>
 </ul>
-<table>
-  <tr>
-    <td><img src="utils/drug_recommendation.png" alt="Drug Recommendation" width="300"></td>
-  </tr>
-</table>
+<div align="center">
+  ![Screenshot 1](utils/ph4.png) | ![Screenshot 2](utils/ph4.png)
+</div>
 
-<h3>🫀 Heart Disease Risk Assessment</h3>
+<h3>🪀 Heart Disease Risk Assessment</h3>
 <p>
-  This module uses **LightGBM & AI classifiers** to assess heart disease risks based on patient history.
+  This module uses <strong>LightGBM & AI classifiers</strong> to assess heart disease risks based on patient history.
 </p>
 <ul>
-  <li>✔️ Evaluates heart disease risk based on lifestyle and medical history.</li>
-  <li>✔️ Provides AI-driven health improvement recommendations.</li>
+  <li>✅ Evaluates heart disease risk based on lifestyle and medical history.</li>
+  <li>✅ Provides AI-driven health improvement recommendations.</li>
 </ul>
-<table>
-  <tr>
-    <td><img src="utils/heart_risk.png" alt="Heart Disease Risk" width="300"></td>
-  </tr>
-</table>
+<div align="center">
+  ![Screenshot 1](utils/ph4.png) | ![Screenshot 2](utils/ph4.png)
+</div>
 
-<h3>🤖 Medibot - AI Health Assistant</h3>
+<h3>🦖 Medibot - AI Health Assistant</h3>
 <p>
-  Our **LLM-powered chatbot** answers medical queries and provides instant healthcare insights using **Hugging Face LLM (Mistral-7B-Instruct)**.
+  Our <strong>LLM-powered chatbot</strong> answers medical queries and provides instant healthcare insights using <strong>Hugging Face LLM (Mistral-7B-Instruct)</strong>.
 </p>
 <ul>
-  <li>✔️ Retrieves medical information from a FAISS vector database.</li>
-  <li>✔️ Provides **reliable AI-driven** answers to health-related questions.</li>
+  <li>✅ Retrieves medical information from a FAISS vector database.</li>
+  <li>✅ Provides <strong>reliable AI-driven</strong> answers to health-related questions.</li>
 </ul>
-<table>
-  <tr>
-    <td><img src="utils/medibot.png" alt="Medibot AI Assistant" width="300"></td>
-  </tr>
-</table>
+<div align="center">
+  ![Screenshot 1](utils/ph4.png) | ![Screenshot 2](utils/ph4.png)
+</div>
+
 
 ---
 
