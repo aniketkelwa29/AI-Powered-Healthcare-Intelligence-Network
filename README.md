@@ -30,7 +30,7 @@
   <li>✅ Provides recommended treatments and precautions.</li>
 </ul>
 
-| ![Screenshot 1](utils/ph4.png) | ![Screenshot 2](utils/ph4.png) |
+| ![Screenshot 1](utils/img1.png) | ![Screenshot 2](utils/img2.png) |
 |---------------------------------|---------------------------------|
 
 <h3>💊 AI-Powered Drug Recommendation</h3>
@@ -42,7 +42,7 @@
   <li>✅ Ensures safer and more effective drug prescriptions.</li>
 </ul>
 
-| ![Screenshot 1](utils/ph4.png) | ![Screenshot 2](utils/ph4.png) |
+| ![Screenshot 1](utils/img3.png) | ![Screenshot 2](utils/img4.png) |
 |---------------------------------|---------------------------------|
 
 
@@ -55,7 +55,7 @@
   <li>✅ Provides AI-driven health improvement recommendations.</li>
 </ul>
 
-| ![Screenshot 1](utils/ph4.png) | ![Screenshot 2](utils/ph4.png) |
+| ![Screenshot 1](utils/img5.png) | ![Screenshot 2](utils/img6.png) |
 |---------------------------------|---------------------------------|
 
 <h3>🦖 Medibot - AI Health Assistant</h3>
@@ -67,7 +67,7 @@
   <li>✅ Provides <strong>reliable AI-driven</strong> answers to health-related questions.</li>
 </ul>
 
-| ![Screenshot 1](utils/ph4.png) | ![Screenshot 2](utils/ph4.png) |
+| ![Screenshot 1](utils/img7.png) | ![Screenshot 2](utils/img8.png) |
 |---------------------------------|---------------------------------|
 
 
