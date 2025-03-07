@@ -30,8 +30,8 @@
   <li>✅ Provides recommended treatments and precautions.</li>
 </ul>
 
-  | ![Screenshot 1](utils/ph4.png) | ![Screenshot 2](utils/ph4.png) |
-
+| ![Screenshot 1](utils/ph4.png) | ![Screenshot 2](utils/ph4.png) |
+|---------------------------------|---------------------------------|
 
 <h3>💊 AI-Powered Drug Recommendation</h3>
 <p>
@@ -41,9 +41,10 @@
   <li>✅ Matches medicines with similar ingredients.</li>
   <li>✅ Ensures safer and more effective drug prescriptions.</li>
 </ul>
-<div align="center">
-  ![Screenshot 1](utils/ph4.png) | ![Screenshot 2](utils/ph4.png)
-</div>
+
+| ![Screenshot 1](utils/ph4.png) | ![Screenshot 2](utils/ph4.png) |
+|---------------------------------|---------------------------------|
+
 
 <h3>🪀 Heart Disease Risk Assessment</h3>
 <p>
@@ -53,9 +54,9 @@
   <li>✅ Evaluates heart disease risk based on lifestyle and medical history.</li>
   <li>✅ Provides AI-driven health improvement recommendations.</li>
 </ul>
-<div align="center">
-  ![Screenshot 1](utils/ph4.png) | ![Screenshot 2](utils/ph4.png)
-</div>
+
+| ![Screenshot 1](utils/ph4.png) | ![Screenshot 2](utils/ph4.png) |
+|---------------------------------|---------------------------------|
 
 <h3>🦖 Medibot - AI Health Assistant</h3>
 <p>
@@ -65,9 +66,9 @@
   <li>✅ Retrieves medical information from a FAISS vector database.</li>
   <li>✅ Provides <strong>reliable AI-driven</strong> answers to health-related questions.</li>
 </ul>
-<div align="center">
-  ![Screenshot 1](utils/ph4.png) | ![Screenshot 2](utils/ph4.png)
-</div>
+
+| ![Screenshot 1](utils/ph4.png) | ![Screenshot 2](utils/ph4.png) |
+|---------------------------------|---------------------------------|
 
 
 ---
