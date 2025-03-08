@@ -29,9 +29,10 @@ https://github.com/user-attachments/assets/360876dc-551a-498b-ab75-472137fed751
   This module uses <strong>Machine Learning</strong> to predict diseases based on symptoms and suggest the best medical recommendations.
 </p>
 <ul>
-  <li>✅ Predicts diseases from given symptoms.</li>
+  <li>✅ Predicts diseases based on symptoms provided by the user.</li>
   <li>✅ Uses <strong>RandomForest Classifier</strong> for predictions.</li>
   <li>✅ Provides recommended treatments and precautions.</li>
+  <li>✅ Provides medical descriptions, precautions, medication suggestions, and diet recommendations**.</li>
 </ul>
 
 | ![Screenshot 1](utils/img1.png) | ![Screenshot 2](utils/img2.png) |
@@ -42,6 +43,8 @@ https://github.com/user-attachments/assets/360876dc-551a-498b-ab75-472137fed751
   Our AI system uses <strong>NLP & Cosine Similarity</strong> to recommend alternative medicines based on drug properties.
 </p>
 <ul>
+  <li>✅ AI-powered alternative medicine finder.</li>
+   <li>✅Utilizes **NLP & cosine similarity** for **accurate drug matching**</li>
   <li>✅ Matches medicines with similar ingredients.</li>
   <li>✅ Ensures safer and more effective drug prescriptions.</li>
 </ul>
@@ -56,18 +59,23 @@ https://github.com/user-attachments/assets/360876dc-551a-498b-ab75-472137fed751
 </p>
 <ul>
   <li>✅ Evaluates heart disease risk based on lifestyle and medical history.</li>
-  <li>✅ Provides AI-driven health improvement recommendations.</li>
+  <li>✅ Uses machine learning models (LightGBM, EasyEnsemble) for predicting heart disease risk.  </li>
+  <li>✅ Takes inputs like age, BMI, smoking habits, medical history, etc.</li>
+  <li>✅ Provides a **personalized heart risk score with AI-driven recommendations**</li>
 </ul>
 
 | ![Screenshot 1](utils/img5.png) | ![Screenshot 2](utils/img6.png) |
 |---------------------------------|---------------------------------|
 
-<h3>🦖 Medibot - AI Health Assistant</h3>
+<h3>🤖 Medibot - AI Health Assistant</h3>
 <p>
   Our <strong>LLM-powered chatbot</strong> answers medical queries and provides instant healthcare insights using <strong>Hugging Face LLM (Mistral-7B-Instruct)</strong>.
 </p>
 <ul>
+  <li>✅ AI-powered medical chatbot based on Mistral-7B-Instruct.</li>
   <li>✅ Retrieves medical information from a FAISS vector database.</li>
+  <li>✅ Retrieves reliable medical information using RAG (Retrieval Augmented Generation.</li>
+  <li>✅ Provides fast, relevant, and fact-based healthcare responses.</li>
   <li>✅ Provides <strong>reliable AI-driven</strong> answers to health-related questions.</li>
 </ul>
 
