@@ -175,7 +175,7 @@ st.markdown("""
             ✅ <b>Secure & Reliable:</b> Your health data is protected with top-tier security.<br>
         </p>
     </div>
-    """, unsafe_allow_html=True)
+    """ , unsafe_allow_html=True)
 
 st.markdown("---")
 
