@@ -197,5 +197,5 @@ git push origin main
 <p align="center">
   <a href="https://github.com/abhaysingh71711" target="_blank">🐙 GitHub</a> |
   <a href="https://linkedin.com/in/abhaysingh71711" target="_blank">🔗 LinkedIn</a> |
-  <a href="https://twitter.com/abhaysingh71711" target="_blank">🐦 Twitter</a>
+  <a href="https://twitter.com/abhaysingh71711" target="_blank"> 🐦 Twitter</a>
 </p>

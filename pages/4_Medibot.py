@@ -92,7 +92,6 @@ def main():
 
     # Sidebar with additional info
     with st.sidebar:
-        st.image("https://via.placeholder.com/300x150", caption="AI Health Assistant")
         st.markdown("""
         ### 🔍 About Medibot:
         - Uses **Mistral-7B-Instruct** for answering medical queries
