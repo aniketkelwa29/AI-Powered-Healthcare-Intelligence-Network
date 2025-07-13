@@ -28,6 +28,7 @@
                 <ul>
                     <li><strong>streamlit:</strong> Frontend interface for the Disease Prediction System.</li>
                 </ul>
+              
             </li>
         </ul>
     </div>
