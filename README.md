@@ -185,6 +185,28 @@ git push origin main
 </ul>
 
 ---
+<h2> Docker Deployment</h2>
+<p>This project is <strong>Docker-first</strong>. Docker ensures that the model can run in any environment without worrying about Python versions, dependencies, or system settings.</p>
+
+```bash
+docker pull abhaysingh71/ai-powered-healthcare-system
+docker run -p 8501:8501 abhaysingh71/ai-powered-healthcare-system
+
+```
+
+<h3>✅ Why Docker?</h3>
+<ul>
+  <li>Environment-independent deployments</li>
+  <li>Fast setup and teardown</li>
+  <li>Easy to host on cloud (AWS, GCP, Azure)</li>
+  <li>Reproducibility for teams and CI/CD pipelines</li>
+</ul>
+
+<h2>🌐 Docker hub</h2>
+<ul>
+  <li><strong>DockerHub</strong>: <a href="https://hub.docker.com/r/abhaysingh71/ai-powered-healthcare-system">https://hub.docker.com/r/abhaysingh71/ai-powered-healthcare-system</a></li>
+</ul>
+
 
 <h2>📜 License</h2>
 <p>
