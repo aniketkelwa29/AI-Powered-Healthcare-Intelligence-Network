@@ -1,3 +1,15 @@
+<p align="center">
+  <a href="https://github.com/AbhaySingh71/AI-Powered-Healthcare-Intelligence-System">
+    <img src="https://img.shields.io/github/stars/AbhaySingh71/AI-Powered-Healthcare-Intelligence-System?style=social" alt="GitHub Stars">
+  </a>
+  <a href="https://hub.docker.com/r/abhaysingh71/ai-powered-healthcare-system">
+    <img src="https://img.shields.io/docker/pulls/abhaysingh71/ai-powered-healthcare-system" alt="Docker Pulls">
+  </a>
+  <a href="https://ai-powered-healthcare-system.streamlit.app/">
+    <img src="https://img.shields.io/badge/Live%20Demo-Streamlit-green?logo=streamlit" alt="Live Demo">
+  </a>
+</p>
+
 <h1 align="center">🩺 AI-Powered Healthcare Intelligence Network</h1>
 
 <p align="center">
