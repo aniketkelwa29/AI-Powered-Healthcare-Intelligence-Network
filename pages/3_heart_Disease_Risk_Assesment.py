@@ -25,7 +25,27 @@ data = pd.read_csv('models/third_feature_models/brfss2022_data_wrangling_output.
 data['heart_disease'] = data['heart_disease'].apply(lambda x: 1 if x == 'yes' else 0).astype('int')
 
 icon = Image.open("utils/heart_disease.jpg")
-st.set_page_config(layout='wide', page_title='AI-Powered Heart Disease Assessment', page_icon=icon)
+st.set_page_config(
+    layout='wide', 
+    page_title='Heart Disease Assessment', 
+    page_icon=icon,
+    menu_items={},  # This removes the burger menu
+    initial_sidebar_state='expanded'
+)
+
+
+# Hide deploy button and menu
+st.markdown("""
+    <style>
+        #MainMenu {visibility: hidden;}
+        div.stDeployButton {display: none;}
+        footer {visibility: hidden;}
+        .stDeployButton {display: none;}
+        .streamlit-expanderHeader {display: none;}
+        div[data-testid="stToolbar"] {display: none !important;}
+        button[kind="menuButton"] {display: none;}
+    </style>
+    """, unsafe_allow_html=True)
 st.sidebar.markdown("<h2 style='color: #ffffff;'>📌  Description</h2>", unsafe_allow_html=True)
 st.sidebar.image("utils/ph5.png", use_container_width=True)
 st.sidebar.markdown("<p class='sidebar-text'>This system analyzes health data, lifestyle, and medical history using AI and machine learning to predict heart disease risk and provide personalized recommendations for improving cardiovascular health.</p>", unsafe_allow_html=True)
@@ -41,7 +61,7 @@ local_css("utils/style_v1.css")
 # Main layout with three columns
 row0_0, row0_1, row0_2, row0_3 = st.columns((0.08, 6, 3, 0.17))
 with row0_1:
-    st.title("AI-Powered Heart Disease Assessment App")
+    st.title("MediAssist - Heart Disease Assessment")
     st.write("Unmatched Accuracy with Cutting-Edge Machine Learning Models")
 st.write('---')
 
@@ -126,7 +146,7 @@ exercise_status = row6_3.selectbox("Have you exercised in the past 30 days?", ["
 
 with row6_1:
     st.write("#### Learn More")
-    st.markdown("[![](https://img.shields.io/badge/GitHub%20-Features%20Information-informational)](https://github.com/AbhaySingh71/AI-Powered-Healthcare-Intelligence-System/tree/main/heart_disease_risk_assessment)")
+    st.markdown("[![](https://img.shields.io/badge/GitHub%20-Features%20Information-informational)](https://github.com/aniketkelwa29/MediAssist)")
 
 # Collect input data
 input_data = {
@@ -172,7 +192,7 @@ st.write('---')
 row8_0, row8_1, row8_2, row8_5 = st.columns((0.08, 7, 5, 0.27))
 
 with row8_1:
-    st.write("#### AI Heart Disease Risk Assessment")
+    st.write("#### MediAssist : Heart Disease Risk Assessment")
 
 btn1 = row8_1.button('Get Your Heart disease Risk Assessment')
 
@@ -417,10 +437,3 @@ if btn1:
         *This app is not a replacement for professional medical advice, diagnosis, or treatment. Always consult your doctor or a qualified healthcare provider with any questions you may have regarding your health.*
     """)
 
-null10_0, row10_1, row10_2 = st.columns((0.04, 7, 0.4))
-with row10_1:
-    st.write("""
-        ### Contacts
-        [![](https://img.shields.io/badge/GitHub-Follow-informational)](https://github.com/AbhaySingh71)
-        [![](https://img.shields.io/badge/Linkedin-Connect-informational)](https://www.linkedin.com/in/abhay-singh-050a5b293/)
-    """)

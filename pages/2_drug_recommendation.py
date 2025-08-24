@@ -5,6 +5,28 @@ import pickle
 import joblib
 from PIL import Image
 
+# Configure page settings
+st.set_page_config(
+    layout='wide',
+    page_title='MediAssist - Drug Recommendation',
+    page_icon='💊',
+    menu_items={},
+    initial_sidebar_state='expanded'
+)
+
+# Hide deploy button and menu
+st.markdown("""
+    <style>
+        #MainMenu {visibility: hidden;}
+        div.stDeployButton {display: none;}
+        footer {visibility: hidden;}
+        .stDeployButton {display: none;}
+        .streamlit-expanderHeader {display: none;}
+        div[data-testid="stToolbar"] {display: none !important;}
+        button[kind="menuButton"] {display: none;}
+    </style>
+    """, unsafe_allow_html=True)
+
 st.sidebar.markdown("<h2 style='color: #ffffff;'>📌  Description</h2>", unsafe_allow_html=True)
 st.sidebar.image("utils/ph4.png", use_container_width=True)
 st.sidebar.markdown("<p class='sidebar-text'>Our AI-powered Drug Recommendation System uses NLP and cosine similarity to analyze medicines and recommend the most relevant alternatives, ensuring accurate, data-driven, and personalized treatment options.</p>", unsafe_allow_html=True)

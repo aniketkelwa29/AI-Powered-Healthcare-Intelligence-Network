@@ -1,10 +1,24 @@
 import streamlit as st
 
 st.set_page_config(
-    page_title="AI-Powered Healthcare Intelligence Network",
+    page_title="MediAssist",
     page_icon="🩺",
-    layout="wide"
+    layout="wide",
+    menu_items={},
+    initial_sidebar_state='expanded'
 )
+
+# Hide deploy button and menu
+st.markdown("""
+    <style>
+        #MainMenu {visibility: hidden;}
+        div.stDeployButton {display: none;}
+        footer {visibility: hidden;}
+        .stDeployButton {display: none;}
+        .streamlit-expanderHeader {display: none;}
+        div[data-testid="stToolbar"] {display: none !important;}
+    </style>
+""", unsafe_allow_html=True)
 
 # Custom CSS for Styling
 st.markdown("""
@@ -95,8 +109,8 @@ st.sidebar.markdown("<p class='sidebar-text'>Use the sidebar to explore differen
 st.sidebar.image("utils/ph3.png", use_container_width=True)
 
 # Main Content
-st.markdown("<div class='title'>🩺 AI-Powered Healthcare Intelligence Network</div>", unsafe_allow_html=True)
-st.markdown("<div class='subtitle'>Transforming Healthcare with AI-driven Predictions & Insights</div>", unsafe_allow_html=True)
+st.markdown("<div class='title'>🩺 MediAssist</div>", unsafe_allow_html=True)
+st.markdown("<div class='subtitle'>Your AI-Powered Healthcare Assistant</div>", unsafe_allow_html=True)
 
 st.image("utils/ph1.png", use_container_width=True)
 
@@ -123,11 +137,6 @@ with col2:
     <div class='section'>
         <h3>❤️ Heart Disease Risk Assessment</h3>
         <p>Assess your heart health and receive AI-powered risk analysis.</p>
-    </div>
-
-    <div class='section'>
-        <h3>🤖 LLM Chatbot</h3>
-        <p>Chat with an AI-powered assistant to get health insights and recommendations.</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -179,21 +188,20 @@ st.markdown("""
 
 st.markdown("---")
 
-# Contact Us (Left Aligned)
+# Contact Section
 st.markdown("""
     <div class='contact'>
         <h2>📬 Contact Us</h2>
         <p>Have questions or need support? Reach out to us at:</p>
-        📧 <a href="mailto:abhaysingh71711@gmail.com">abhaysingh71711@gmail.com</a>
+        📧 <a href="mailto:aniketkelwa29@gmail.com">aniketkelwa29@gmail.com</a>
     </div>
     """, unsafe_allow_html=True)
 
 # Profile Links (Centered)
 st.markdown("""
     <div class='profile-links'>
-        <h2>🌐 Connect With Me</h2>
-        <a href="https://github.com/AbhaySingh71" target="_blank">GitHub</a> |
-        <a href="https://www.linkedin.com/in/abhay-singh-050a5b293/" target="_blank">LinkedIn</a> |
-        <a href="https://x.com/AbhaySingh71711" target="_blank">Twitter</a>
+        <h2>🌐 Connect With Us</h2>
+        <a href="https://github.com/aniketkelwa29" target="_blank">GitHub</a> |
+        <a href="https://www.linkedin.com/in/aniket-kelwa-a79215367/" target="_blank">LinkedIn</a>
     </div>
     """, unsafe_allow_html=True)

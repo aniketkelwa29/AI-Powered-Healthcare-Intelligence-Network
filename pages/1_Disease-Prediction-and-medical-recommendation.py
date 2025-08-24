@@ -5,7 +5,26 @@ import numpy as np
 from thefuzz import process
 import ast
 
-st.set_page_config(page_title="AI-Powered Healthcare Intelligence Network", page_icon="🩺", layout='wide')
+st.set_page_config(
+    page_title="MediAssist - Disease Prediction", 
+    page_icon="🩺", 
+    layout='wide',
+    menu_items={},
+    initial_sidebar_state='expanded'
+)
+
+# Hide deploy button and menu
+st.markdown("""
+    <style>
+        #MainMenu {visibility: hidden;}
+        div.stDeployButton {display: none;}
+        footer {visibility: hidden;}
+        .stDeployButton {display: none;}
+        .streamlit-expanderHeader {display: none;}
+        div[data-testid="stToolbar"] {display: none !important;}
+        button[kind="menuButton"] {display: none;}
+    </style>
+    """, unsafe_allow_html=True)
 
 st.sidebar.markdown("<h2 style='color: #ffffff;'>📌 Description</h2>", unsafe_allow_html=True)
 st.sidebar.image("utils/ph3.png", use_container_width=True)
@@ -48,20 +67,54 @@ def information(predicted_dis):
     except Exception:
         return "Description not available", [], [], [], []
 
+def check_symptom_count(patient_symptoms):
+    # Define minimum symptoms needed for prediction
+    MIN_SYMPTOMS = 2
+    return len(patient_symptoms) >= MIN_SYMPTOMS
+
+def get_disease_specific_rules():
+    return {
+        'headache': ['Migraine', 'Common Cold', 'Malaria', 'Dengue'],
+        'joint_pain': ['Arthritis', 'Dengue', 'Chikungunya'],
+        'high_fever': ['Malaria', 'Dengue', 'Typhoid'],
+        'skin_rash': ['Chicken pox', 'Dengue', 'Drug Reaction'],
+        'fatigue': ['Diabetes', 'Malaria', 'Typhoid'],
+        'chest_pain': ['Heart attack', 'Bronchial Asthma'],
+        'breathlessness': ['Bronchial Asthma', 'Heart attack'],
+        'abdominal_pain': ['GERD', 'Peptic ulcer diseae', 'Hepatitis'],
+        'vomiting': ['Food Poisoning', 'Malaria', 'Dengue', 'Typhoid'],
+    }
+
 def predicted_value(patient_symptoms):
     try:
+        if not check_symptom_count(patient_symptoms):
+            return "Please provide at least 2 symptoms for accurate prediction"
+
+        # Get disease rules
+        disease_rules = get_disease_specific_rules()
+        
+        # Convert symptoms to vector for model prediction
         i_vector = np.zeros(len(symptoms_list_processed))
         for symptom in patient_symptoms:
-            i_vector[symptoms_list_processed[symptom]] = 1
-        return diseases_list.get(model.predict([i_vector])[0], "Unknown Disease")
-    except Exception:
-        return "Prediction Error"
+            if symptom in symptoms_list_processed:
+                i_vector[symptoms_list_processed[symptom]] = 1
+        
+        # Get model prediction
+        model_prediction = diseases_list.get(model.predict([i_vector])[0], "Unknown Disease")
+        
+        # Check if single common symptom prediction
+        if len(patient_symptoms) == 1 and patient_symptoms[0] in disease_rules:
+            return "More symptoms needed. This symptom could indicate: " + ", ".join(disease_rules[patient_symptoms[0]])
+            
+        return model_prediction
+    except Exception as e:
+        return f"Prediction Error: {str(e)}"
 
 def correct_spelling(symptom):
-    closest_match, score = process.extractOne(symptom, symptoms_list_processed.keys())
-    return closest_match if score >= 80 else None
+    closest_match, score = process.extractOne(symptom.lower(), symptoms_list_processed.keys())
+    return closest_match if score >= 85 else None
 
-st.title("🩺 Disease Prediction & Medical Recommendation")
+st.title("🩺 MediAssist - Disease Prediction")
 
 # Disease Prediction Section
 st.markdown("### Disease Prediction Based on Symptoms")
@@ -70,20 +123,72 @@ user_input = st.text_area("Enter symptoms (comma-separated):", placeholder="e.g.
 
 if st.button("Predict Disease"):
     if user_input:
-        patient_symptoms = [s.strip() for s in user_input.split(',')]
-        patient_symptoms = [correct_spelling(symptom) for symptom in patient_symptoms if correct_spelling(symptom)]
+        # Clean and correct symptoms
+        initial_symptoms = [s.strip().lower() for s in user_input.split(',')]
+        patient_symptoms = []
+        invalid_symptoms = []
+        
+        # Process each symptom
+        for symptom in initial_symptoms:
+            corrected = correct_spelling(symptom)
+            if corrected and corrected not in patient_symptoms:
+                patient_symptoms.append(corrected)
+            else:
+                invalid_symptoms.append(symptom)
+        
         if patient_symptoms:
-            predicted_disease = predicted_value(patient_symptoms)
-            dis_des, precautions, medications, rec_diet, workout = information(predicted_disease)
+            st.write("**Symptoms Identified:**", ", ".join(patient_symptoms))
+            if invalid_symptoms:
+                st.warning(f"Could not recognize these symptoms: {', '.join(invalid_symptoms)}")
             
-            st.success(f"**Predicted Disease:** {predicted_disease}")
-            st.write(f"**Description:** {dis_des}")
-            st.write("**Precautions:**", ', '.join(str(item) for item in precautions if item))
-            st.write("**Medications:**", ', '.join(str(item) for item in medications if item))
-            st.write("**Recommended Diet:**", ', '.join(str(item) for item in rec_diet if item))
-            st.write("**Recommended Workout:**", ', '.join(str(item) for item in workout if item))
+            predicted_disease = predicted_value(patient_symptoms)
+            
+            # Check if it's a warning message about needing more symptoms
+            if "More symptoms needed" in predicted_disease:
+                st.warning(predicted_disease)
+                st.write("Please provide additional symptoms for a more accurate prediction.")
+            elif "Please provide at least 2 symptoms" in predicted_disease:
+                st.warning(predicted_disease)
+                st.write("Single symptoms can be associated with many conditions. Adding more symptoms helps narrow down the possibilities.")
+            else:
+                dis_des, precautions, medications, rec_diet, workout = information(predicted_disease)
+                
+                # Display results
+                st.success(f"**Predicted Disease:** {predicted_disease}")
+                
+                st.write("---")
+                st.write("### Detailed Information")
+                st.write(f"**Description:** {dis_des}")
+                
+                if precautions:
+                    st.write("**Precautions:**")
+                    for p in precautions:
+                        if p and str(p).lower() != 'nan':
+                            st.write(f"- {p}")
+                
+                if medications:
+                    st.write("**Recommended Medications:**")
+                    for m in medications:
+                        if m and str(m).lower() != 'nan':
+                            st.write(f"- {m}")
+                
+                if rec_diet:
+                    st.write("**Recommended Diet:**")
+                    for d in rec_diet:
+                        if d and str(d).lower() != 'nan':
+                            st.write(f"- {d}")
+                
+                if workout:
+                    st.write("**Recommended Exercises:**")
+                    for w in workout:
+                        if w and str(w).lower() != 'nan':
+                            st.write(f"- {w}")
+                            
+                st.write("---")
+                st.write("**Disclaimer:** This is an AI-powered prediction system. Always consult with a healthcare professional for accurate diagnosis and treatment.")
         else:
-            st.error("Invalid symptoms detected. Please check and try again.")
+            st.error("Invalid symptoms detected. Please check your spelling and try again.")
+            st.write("**Tip:** Enter symptoms like: headache, fever, cough, etc.")
     else:
         st.warning("Please enter at least one symptom.")
 
