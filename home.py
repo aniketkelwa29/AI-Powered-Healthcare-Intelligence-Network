@@ -193,7 +193,8 @@ st.markdown("""
     <div class='contact'>
         <h2>📬 Contact Us</h2>
         <p>Have questions or need support? Reach out to us at:</p>
-        📧 <a href="mailto:aniketkelwa29@gmail.com">aniketkelwa29@gmail.com</a>
+        📧 <a href="mailto:aniketkelwa29@gmail.com">aniketkelwa29@gmail.com</a><br>
+        📧 <a href="mailto:anujguptam6388@gmail.com">anujguptam6388@gmail.com</a>
     </div>
     """, unsafe_allow_html=True)
 
