@@ -1,213 +1,500 @@
 import streamlit as st
-import pickle
 import pandas as pd
 import numpy as np
-from thefuzz import process
+import pickle
 import ast
+import re
+from pathlib import Path
 
-st.set_page_config(
-    page_title="MediAssist - Disease Prediction", 
-    page_icon="🩺", 
-    layout='wide',
-    menu_items={},
-    initial_sidebar_state='expanded'
-)
+# Optional fuzzy matcher
+try:
+    from thefuzz import process as fuzz_process
+except Exception:
+    fuzz_process = None
 
-# Hide deploy button and menu
+# ----------------------
+# Streamlit config & style
+# ----------------------
+st.set_page_config(page_title="🩺 MediAssist - AI Disease Predictor", page_icon="🩺", layout="wide")
 st.markdown("""
-    <style>
-        #MainMenu {visibility: hidden;}
-        div.stDeployButton {display: none;}
-        footer {visibility: hidden;}
-        .stDeployButton {display: none;}
-        .streamlit-expanderHeader {display: none;}
-        div[data-testid="stToolbar"] {display: none !important;}
-        button[kind="menuButton"] {display: none;}
-    </style>
-    """, unsafe_allow_html=True)
+<style>
+  #MainMenu {visibility: hidden;}
+  footer {visibility: hidden;}
+  .block-container {padding: 1rem 2rem;}
+  .small {font-size:0.9rem;color:#889}
+</style>
+""", unsafe_allow_html=True)
 
-st.sidebar.markdown("<h2 style='color: #ffffff;'>📌 Description</h2>", unsafe_allow_html=True)
-st.sidebar.image("utils/ph3.png", use_container_width=True)
-st.sidebar.markdown("<p class='sidebar-text'>The Disease Prediction & Medical Recommendation system uses AI to analyze symptoms, predict diseases, assess health risks, and suggest personalized treatments—enhancing early diagnosis and improving healthcare decisions for better patient outcomes.</p>", unsafe_allow_html=True)
+# ----------------------
+# Utilities
+# ----------------------
+NORMALIZE_RX = re.compile(r"[^a-z0-9]+")
 
+def norm(text: str) -> str:
+    if not isinstance(text, str):
+        return ""
+    t = text.strip().lower()
+    t = NORMALIZE_RX.sub(" ", t)
+    t = re.sub(r"\s+", " ", t).strip()
+    return t
 
+@st.cache_data(show_spinner=False)
+def find_base_paths() -> list:
+    candidates = [
+        Path("data/Disease-Prediction-and-Medical dataset"),
+        Path("data/medical"),
+        Path("data"),
+        Path("."),
+    ]
+    return [p for p in candidates if p.exists()]
 
-@st.cache_resource
-def load_data():
-    try:
-        sym_des = pd.read_csv("data/Disease-Prediction-and-Medical dataset/symptoms_df.csv")
-        precautions = pd.read_csv("data/Disease-Prediction-and-Medical dataset/precautions_df.csv")
-        workout = pd.read_csv("data/Disease-Prediction-and-Medical dataset/workout_df.csv")
-        description = pd.read_csv("data/Disease-Prediction-and-Medical dataset/description.csv")
-        medications = pd.read_csv("data/Disease-Prediction-and-Medical dataset/medications.csv")
-        diets = pd.read_csv("data/Disease-Prediction-and-Medical dataset/diets.csv")
-        model = pickle.load(open('models/first_feature_models/RandomForest.pkl', 'rb'))
-        return sym_des, precautions, workout, description, medications, diets, model
-    except Exception as e:
-        st.error(f"Error loading data: {e}")
-        return None, None, None, None, None, None, None
+@st.cache_data(show_spinner=False)
+def safe_read_csv(name: str) -> pd.DataFrame:
+    for base in find_base_paths():
+        p = base / name
+        if p.exists():
+            return pd.read_csv(p)
+    if Path(name).exists():
+        return pd.read_csv(name)
+    raise FileNotFoundError(f"Could not find '{name}'. Checked: " + ", ".join(str(base / name) for base in find_base_paths() + [Path(name)]))
 
-sym_des, precautions, workout, description, medications, diets, model = load_data()
+@st.cache_resource(show_spinner=False)
+def load_resources():
+    sym_des = safe_read_csv("symptoms_df.csv")
+    precautions = safe_read_csv("precautions_df.csv")
+    workout = safe_read_csv("workout_df.csv")
+    description = safe_read_csv("description.csv")
+    medications = safe_read_csv("medications.csv")
+    diets = safe_read_csv("diets.csv")
 
-disease_names = list(description['Disease'].unique()) if description is not None else []
+    model_paths = [
+        Path("models/first_feature_models/RandomForest.pkl"),
+        Path("models/RandomForest.pkl"),
+        Path("RandomForest.pkl"),
+        Path("models/model.pkl"),
+    ]
+    model = None
+    for mp in model_paths:
+        if mp.exists():
+            with open(mp, "rb") as f:
+                model = pickle.load(f)
+            break
+    if model is None:
+        raise FileNotFoundError("RandomForest model file not found in expected locations.")
 
-symptoms_list = {'itching': 0, 'skin_rash': 1, 'nodal_skin_eruptions': 2, 'continuous_sneezing': 3, 'shivering': 4, 'chills': 5, 'joint_pain': 6, 'stomach_pain': 7, 'acidity': 8, 'ulcers_on_tongue': 9, 'muscle_wasting': 10, 'vomiting': 11, 'burning_micturition': 12, 'spotting_ urination': 13, 'fatigue': 14, 'weight_gain': 15, 'anxiety': 16, 'cold_hands_and_feets': 17, 'mood_swings': 18, 'weight_loss': 19, 'restlessness': 20, 'lethargy': 21, 'patches_in_throat': 22, 'irregular_sugar_level': 23, 'cough': 24, 'high_fever': 25, 'sunken_eyes': 26, 'breathlessness': 27, 'sweating': 28, 'dehydration': 29, 'indigestion': 30, 'headache': 31, 'yellowish_skin': 32, 'dark_urine': 33, 'nausea': 34, 'loss_of_appetite': 35, 'pain_behind_the_eyes': 36, 'back_pain': 37, 'constipation': 38, 'abdominal_pain': 39, 'diarrhoea': 40, 'mild_fever': 41, 'yellow_urine': 42, 'yellowing_of_eyes': 43, 'acute_liver_failure': 44, 'fluid_overload': 45, 'swelling_of_stomach': 46, 'swelled_lymph_nodes': 47, 'malaise': 48, 'blurred_and_distorted_vision': 49, 'phlegm': 50, 'throat_irritation': 51, 'redness_of_eyes': 52, 'sinus_pressure': 53, 'runny_nose': 54, 'congestion': 55, 'chest_pain': 56, 'weakness_in_limbs': 57, 'fast_heart_rate': 58, 'pain_during_bowel_movements': 59, 'pain_in_anal_region': 60, 'bloody_stool': 61, 'irritation_in_anus': 62, 'neck_pain': 63, 'dizziness': 64, 'cramps': 65, 'bruising': 66, 'obesity': 67, 'swollen_legs': 68, 'swollen_blood_vessels': 69, 'puffy_face_and_eyes': 70, 'enlarged_thyroid': 71, 'brittle_nails': 72, 'swollen_extremeties': 73, 'excessive_hunger': 74, 'extra_marital_contacts': 75, 'drying_and_tingling_lips': 76, 'slurred_speech': 77, 'knee_pain': 78, 'hip_joint_pain': 79, 'muscle_weakness': 80, 'stiff_neck': 81, 'swelling_joints': 82, 'movement_stiffness': 83, 'spinning_movements': 84, 'loss_of_balance': 85, 'unsteadiness': 86, 'weakness_of_one_body_side': 87, 'loss_of_smell': 88, 'bladder_discomfort': 89, 'foul_smell_of urine': 90, 'continuous_feel_of_urine': 91, 'passage_of_gases': 92, 'internal_itching': 93, 'toxic_look_(typhos)': 94, 'depression': 95, 'irritability': 96, 'muscle_pain': 97, 'altered_sensorium': 98, 'red_spots_over_body': 99, 'belly_pain': 100, 'abnormal_menstruation': 101, 'dischromic _patches': 102, 'watering_from_eyes': 103, 'increased_appetite': 104, 'polyuria': 105, 'family_history': 106, 'mucoid_sputum': 107, 'rusty_sputum': 108, 'lack_of_concentration': 109, 'visual_disturbances': 110, 'receiving_blood_transfusion': 111, 'receiving_unsterile_injections': 112, 'coma': 113, 'stomach_bleeding': 114, 'distention_of_abdomen': 115, 'history_of_alcohol_consumption': 116, 'fluid_overload.1': 117, 'blood_in_sputum': 118, 'prominent_veins_on_calf': 119, 'palpitations': 120, 'painful_walking': 121, 'pus_filled_pimples': 122, 'blackheads': 123, 'scurring': 124, 'skin_peeling': 125, 'silver_like_dusting': 126, 'small_dents_in_nails': 127, 'inflammatory_nails': 128, 'blister': 129, 'red_sore_around_nose': 130, 'yellow_crust_ooze': 131}
-diseases_list = {15: 'Fungal infection', 4: 'Allergy', 16: 'GERD', 9: 'Chronic cholestasis', 14: 'Drug Reaction', 33: 'Peptic ulcer diseae', 1: 'AIDS', 12: 'Diabetes ', 17: 'Gastroenteritis', 6: 'Bronchial Asthma', 23: 'Hypertension ', 30: 'Migraine', 7: 'Cervical spondylosis', 32: 'Paralysis (brain hemorrhage)', 28: 'Jaundice', 29: 'Malaria', 8: 'Chicken pox', 11: 'Dengue', 37: 'Typhoid', 40: 'hepatitis A', 19: 'Hepatitis B', 20: 'Hepatitis C', 21: 'Hepatitis D', 22: 'Hepatitis E', 3: 'Alcoholic hepatitis', 36: 'Tuberculosis', 10: 'Common Cold', 34: 'Pneumonia', 13: 'Dimorphic hemmorhoids(piles)', 18: 'Heart attack', 39: 'Varicose veins', 26: 'Hypothyroidism', 24: 'Hyperthyroidism', 25: 'Hypoglycemia', 31: 'Osteoarthristis', 5: 'Arthritis', 0: '(vertigo) Paroymsal  Positional Vertigo', 2: 'Acne', 38: 'Urinary tract infection', 35: 'Psoriasis', 27: 'Impetigo'}
+    return sym_des, precautions, workout, description, medications, diets, model
 
-symptoms_list_processed = {symptom.replace('_', ' ').lower(): value for symptom, value in symptoms_list.items()}
+# ----------------------
+# Feature helpers
+# ----------------------
+def extract_feature_names(sym_des: pd.DataFrame, model) -> list:
+    if hasattr(model, "feature_names_in_"):
+        return [str(x) for x in list(model.feature_names_in_)]
+    cols = [c for c in sym_des.columns if norm(c) != "disease"]
+    return cols
 
-def information(predicted_dis):
-    try:
-        disease_desciption = description.loc[description['Disease'] == predicted_dis, 'Description'].values[0]
-        disease_precautions = precautions.loc[precautions['Disease'] == predicted_dis, ['Precaution_1', 'Precaution_2', 'Precaution_3', 'Precaution_4']].values.flatten().tolist()
-        disease_medications = ast.literal_eval(medications.loc[medications['Disease'] == predicted_dis, 'Medication'].values[0])
-        disease_diet = ast.literal_eval(diets.loc[diets['Disease'] == predicted_dis, 'Diet'].values[0])
-        disease_workout = workout.loc[workout['disease'] == predicted_dis, 'workout'].values.tolist()
-        return disease_desciption, disease_precautions, disease_medications, disease_diet, disease_workout
-    except Exception:
-        return "Description not available", [], [], [], []
-
-def check_symptom_count(patient_symptoms):
-    # Define minimum symptoms needed for prediction
-    MIN_SYMPTOMS = 2
-    return len(patient_symptoms) >= MIN_SYMPTOMS
-
-def get_disease_specific_rules():
-    return {
-        'headache': ['Migraine', 'Common Cold', 'Malaria', 'Dengue'],
-        'joint_pain': ['Arthritis', 'Dengue', 'Chikungunya'],
-        'high_fever': ['Malaria', 'Dengue', 'Typhoid'],
-        'skin_rash': ['Chicken pox', 'Dengue', 'Drug Reaction'],
-        'fatigue': ['Diabetes', 'Malaria', 'Typhoid'],
-        'chest_pain': ['Heart attack', 'Bronchial Asthma'],
-        'breathlessness': ['Bronchial Asthma', 'Heart attack'],
-        'abdominal_pain': ['GERD', 'Peptic ulcer diseae', 'Hepatitis'],
-        'vomiting': ['Food Poisoning', 'Malaria', 'Dengue', 'Typhoid'],
+@st.cache_data(show_spinner=False)
+def build_alias_map(feature_names: list) -> dict:
+    alias = {}
+    synonyms = {
+        "fever": "high_fever",
+        "high fever": "high_fever",
+        "stomach pain": "abdominal_pain",
+        "belly pain": "abdominal_pain",
+        "tummy pain": "abdominal_pain",
+        "throat pain": "sore_throat",
+        "runny nose": "runny_nose",
+        "blocked nose": "congestion",
+        "body ache": "muscle_pain",
+        "loose motion": "diarrhoea",
+        "vomitting": "vomiting",
+        "coughing": "cough",
+        "cold": "chills",
+        "bp": "high_blood_pressure",
+        "sugar": "high_blood_sugar",
+        "breathlessness": "shortness_of_breath",
+        "chest pain": "chest_pain",
+        "itch": "itching",
+        "period pain": "menstrual_pain",
     }
 
-def predicted_value(patient_symptoms):
-    try:
-        if not check_symptom_count(patient_symptoms):
-            return "Please provide at least 2 symptoms for accurate prediction"
+    for feat in feature_names:
+        c = str(feat)
+        n = norm(c)
+        alias[n] = c
+        alias[n.replace(" ", "_")] = c
+        alias[n.replace(" ", "")] = c
+        alias[n.replace("_", " ")] = c
 
-        # Get disease rules
-        disease_rules = get_disease_specific_rules()
-        
-        # Convert symptoms to vector for model prediction
-        i_vector = np.zeros(len(symptoms_list_processed))
-        for symptom in patient_symptoms:
-            if symptom in symptoms_list_processed:
-                i_vector[symptoms_list_processed[symptom]] = 1
-        
-        # Get model prediction
-        model_prediction = diseases_list.get(model.predict([i_vector])[0], "Unknown Disease")
-        
-        # Check if single common symptom prediction
-        if len(patient_symptoms) == 1 and patient_symptoms[0] in disease_rules:
-            return "More symptoms needed. This symptom could indicate: " + ", ".join(disease_rules[patient_symptoms[0]])
-            
-        return model_prediction
-    except Exception as e:
-        return f"Prediction Error: {str(e)}"
+    for k, v in list(synonyms.items()):
+        if v in feature_names:
+            alias[norm(k)] = v
 
-def correct_spelling(symptom):
-    closest_match, score = process.extractOne(symptom.lower(), symptoms_list_processed.keys())
-    return closest_match if score >= 85 else None
+    return alias
 
-st.title("🩺 MediAssist - Disease Prediction")
 
-# Disease Prediction Section
-st.markdown("### Disease Prediction Based on Symptoms")
-st.markdown("_To get the best and most accurate results, provide as many symptoms as possible._")
-user_input = st.text_area("Enter symptoms (comma-separated):", placeholder="e.g., headache, constipation, nausea")
+def match_symptom(token: str, alias_map: dict, threshold: int = 86):
+    key = norm(token)
+    if key in alias_map:
+        return alias_map[key], key, 100
 
-if st.button("Predict Disease"):
-    if user_input:
-        # Clean and correct symptoms
-        initial_symptoms = [s.strip().lower() for s in user_input.split(',')]
-        patient_symptoms = []
-        invalid_symptoms = []
-        
-        # Process each symptom
-        for symptom in initial_symptoms:
-            corrected = correct_spelling(symptom)
-            if corrected and corrected not in patient_symptoms:
-                patient_symptoms.append(corrected)
+    if fuzz_process is not None:
+        choices = list(alias_map.keys())
+        match = fuzz_process.extractOne(key, choices)
+        if match:
+            best_key, score = match[0], match[1]
+            if score >= threshold:
+                return alias_map[best_key], best_key, score
             else:
-                invalid_symptoms.append(symptom)
-        
-        if patient_symptoms:
-            st.write("**Symptoms Identified:**", ", ".join(patient_symptoms))
-            if invalid_symptoms:
-                st.warning(f"Could not recognize these symptoms: {', '.join(invalid_symptoms)}")
-            
-            predicted_disease = predicted_value(patient_symptoms)
-            
-            # Check if it's a warning message about needing more symptoms
-            if "More symptoms needed" in predicted_disease:
-                st.warning(predicted_disease)
-                st.write("Please provide additional symptoms for a more accurate prediction.")
-            elif "Please provide at least 2 symptoms" in predicted_disease:
-                st.warning(predicted_disease)
-                st.write("Single symptoms can be associated with many conditions. Adding more symptoms helps narrow down the possibilities.")
-            else:
-                dis_des, precautions, medications, rec_diet, workout = information(predicted_disease)
-                
-                # Display results
-                st.success(f"**Predicted Disease:** {predicted_disease}")
-                
-                st.write("---")
-                st.write("### Detailed Information")
-                st.write(f"**Description:** {dis_des}")
-                
-                if precautions:
-                    st.write("**Precautions:**")
-                    for p in precautions:
-                        if p and str(p).lower() != 'nan':
-                            st.write(f"- {p}")
-                
-                if medications:
-                    st.write("**Recommended Medications:**")
-                    for m in medications:
-                        if m and str(m).lower() != 'nan':
-                            st.write(f"- {m}")
-                
-                if rec_diet:
-                    st.write("**Recommended Diet:**")
-                    for d in rec_diet:
-                        if d and str(d).lower() != 'nan':
-                            st.write(f"- {d}")
-                
-                if workout:
-                    st.write("**Recommended Exercises:**")
-                    for w in workout:
-                        if w and str(w).lower() != 'nan':
-                            st.write(f"- {w}")
-                            
-                st.write("---")
-                st.write("**Disclaimer:** This is an AI-powered prediction system. Always consult with a healthcare professional for accurate diagnosis and treatment.")
+                return alias_map[best_key], best_key, score
+    return None, None, 0
+
+
+def parse_free_text(text: str) -> list:
+    if not text:
+        return []
+    text = text.replace("/", ",").replace(";", ",")
+    text = re.sub(r"\band\b", ",", text, flags=re.IGNORECASE)
+    raw = [t.strip() for t in text.split(",")]
+    return [t for t in raw if t]
+
+
+def symptoms_to_vector(selected_features: list, feature_names: list) -> np.ndarray:
+    vec = np.zeros(len(feature_names), dtype=float)
+    name_to_idx = {f: i for i, f in enumerate(feature_names)}
+    for f in selected_features:
+        i = name_to_idx.get(f)
+        if i is not None:
+            vec[i] = 1.0
+    return vec
+
+# ----------------------
+# Load resources
+# ----------------------
+try:
+    sym_des, precautions, workout, description, medications, diets, model = load_resources()
+except Exception as e:
+    st.error(f"❌ Error loading resources: {e}")
+    st.stop()
+
+FEATURES = extract_feature_names(sym_des, model)
+ALIAS_MAP = build_alias_map(FEATURES)
+
+# Build normalized disease maps from description dataframe (preferred source of truth)
+norm2orig = {}
+disease_description = {}
+try:
+    # find disease column
+    desc_cols = [c for c in description.columns if 'disease' in c.lower()]
+    desc_col = desc_cols[0] if desc_cols else description.columns[0]
+    desc_text_col = next((c for c in description.columns if 'description' in c.lower()), None)
+    for _, row in description.iterrows():
+        orig = row.get(desc_col, None)
+        if pd.isna(orig) or orig is None:
+            continue
+        orig = str(orig).strip()
+        k = norm(orig)
+        norm2orig[k] = orig
+        if desc_text_col:
+            v = row.get(desc_text_col, '')
+            disease_description[k] = str(v) if not pd.isna(v) else ''
         else:
-            st.error("Invalid symptoms detected. Please check your spelling and try again.")
-            st.write("**Tip:** Enter symptoms like: headache, fever, cough, etc.")
+            # try second column
+            others = [c for c in description.columns if c != desc_col]
+            disease_description[k] = str(row.get(others[0], '')) if others else ''
+except Exception:
+    norm2orig = {}
+    disease_description = {}
+
+# Helper to parse various cell formats into list of strings
+
+def parse_cell_to_list(raw):
+    items = []
+    if pd.isna(raw) or raw is None:
+        return items
+    if isinstance(raw, (list, tuple)):
+        return [str(x).strip() for x in raw if pd.notna(x) and str(x).strip()]
+    if isinstance(raw, str):
+        s = raw.strip()
+        # literal list-like
+        if s.startswith('[') and s.endswith(']'):
+            try:
+                parsed = ast.literal_eval(s)
+                if isinstance(parsed, (list, tuple)):
+                    return [str(x).strip() for x in parsed if str(x).strip()]
+            except Exception:
+                pass
+        # comma/semicolon/newline separated
+        if any(delim in s for delim in [',', ';', '\n']):
+            parts = re.split(r'[,;\n]+', s)
+            return [p.strip() for p in parts if p.strip()]
+        # otherwise single value
+        return [s]
+    # fallback
+    try:
+        return [str(raw).strip()]
+    except Exception:
+        return []
+
+# Build disease -> lists dictionaries from dataframes
+
+def build_lookup_from_df(df, value_cols=None):
+    mapping = {}
+    if df is None or df.empty:
+        return mapping
+    # find disease column
+    disease_cols = [c for c in df.columns if 'disease' in c.lower()]
+    key_col = disease_cols[0] if disease_cols else df.columns[0]
+    # identify which columns to treat as values
+    if value_cols:
+        cols_to_use = [c for c in value_cols if c in df.columns]
     else:
-        st.warning("Please enter at least one symptom.")
+        cols_to_use = [c for c in df.columns if c != key_col]
+    for _, row in df.iterrows():
+        raw_d = row.get(key_col, None)
+        if pd.isna(raw_d) or raw_d is None:
+            continue
+        orig = str(raw_d).strip()
+        k = norm(orig)
+        norm2orig.setdefault(k, orig)
+        items = []
+        for c in cols_to_use:
+            raw = row.get(c, None)
+            items.extend(parse_cell_to_list(raw))
+        # deduplicate preserving order
+        seen = set()
+        out = []
+        for it in items:
+            if it and it not in seen:
+                seen.add(it)
+                out.append(it)
+        mapping[k] = out
+    return mapping
 
-st.markdown("---")
+# Build the specific mappings
+try:
+    # For precautions, many datasets put each precaution in its own column after 'Disease'
+    disease_precautions = build_lookup_from_df(precautions)
+except Exception:
+    disease_precautions = {}
 
-# Disease Recommendations Section
-st.markdown("### Search for Disease Descrpition")
-disease_query = st.text_input("Type a disease name to get recommendations:", placeholder="Start typing...")
+try:
+    # Medications: often in a column called 'Medication' or similar
+    med_candidates = [c for c in medications.columns if 'med' in c.lower()]
+    disease_medications = build_lookup_from_df(medications, value_cols=med_candidates if med_candidates else None)
+except Exception:
+    disease_medications = {}
 
-if disease_query:
-    matches = [d for d in disease_names if d.lower().startswith(disease_query.lower())]
-    if matches:
-        selected_disease = matches[0]
-        dis_des, precautions, medications, rec_diet, workout = information(selected_disease)
-        st.subheader(f"Recommendations for {selected_disease}")
-        st.write(f"**Description:** {dis_des}")
-        st.write("**Precautions:**", ', '.join(str(item) for item in precautions if item))
-        st.write("**Medications:**", ', '.join(str(item) for item in medications if item))
-        st.write("**Recommended Diet:**", ', '.join(str(item) for item in rec_diet if item))
-        st.write("**Recommended Workout:**", ', '.join(str(item) for item in workout if item))
+try:
+    diet_candidates = [c for c in diets.columns if 'diet' in c.lower()]
+    disease_diets = build_lookup_from_df(diets, value_cols=diet_candidates if diet_candidates else None)
+except Exception:
+    disease_diets = {}
+
+try:
+    # workouts/exercises
+    workout_cols = [c for c in workout.columns if c.lower() != 'disease']
+    disease_exercises = build_lookup_from_df(workout)
+except Exception:
+    disease_exercises = {}
+
+# Build a canonical list of diseases (original names) for searching
+DISEASE_ORIG_LIST = [norm2orig[k] for k in norm2orig.keys()]
+DISEASE_NORM_LIST = list(norm2orig.keys())
+
+# ----------------------
+# Sidebar & UI
+# ----------------------
+st.sidebar.image("utils/ph3.png", use_container_width=True)
+st.sidebar.markdown("### 🤖 About MediAssist")
+st.sidebar.info("AI-powered disease prediction for educational purposes. Not medical advice.")
+
+with st.sidebar.expander("⚙️ Settings", expanded=False):
+    fuzzy_threshold = st.slider("Fuzzy match threshold", 70, 95, 86, 1)
+    min_symptoms_needed = st.number_input("Minimum symptoms to predict", 1, 10, 2)
+    min_prob_warn = st.slider("Warn if top probability below (%)", 0, 100, 25)
+
+# Main UI
+st.title("🩺 MediAssist — AI Disease Prediction")
+st.caption("Enter symptoms to receive AI-based differentials. Click 'View Info' to get care tips for a disease.")
+
+col1, col2 = st.columns([1.2, 1])
+with col1:
+    free_text = st.text_area("Type symptoms (comma-separated)", placeholder="e.g., fever, cough, headache")
+    with st.expander("Or select symptoms (recommended)"):
+        selected_tags = st.multiselect("Select symptoms:", options=sorted(set(ALIAS_MAP.values())))
+    if st.button("🔍 Predict Disease", use_container_width=True):
+        st.session_state["_run_pred"] = True
+        st.session_state["selected_disease_norm"] = ""
+
+with col2:
+    st.markdown("**Tips**")
+    st.markdown("- Use the selector for best accuracy.\n- Free text like 'fever and cough' is supported.\n- Click 'View Info' next to a predicted disease to see precautions.")
+
+# Ensure session state keys
+if "selected_disease_norm" not in st.session_state:
+    st.session_state["selected_disease_norm"] = ""
+if "disease_search" not in st.session_state:
+    st.session_state["disease_search"] = ""
+
+# ----------------------
+# Prediction logic
+# ----------------------
+if st.session_state.get("_run_pred"):
+    tokens = parse_free_text(free_text)
+    recognized = []
+    unmatched = []
+
+    for tag in selected_tags:
+        if tag in FEATURES and tag not in recognized:
+            recognized.append(tag)
+
+    for tok in tokens:
+        can, matched_key, score = match_symptom(tok, ALIAS_MAP, threshold=fuzzy_threshold)
+        if can and can not in recognized:
+            recognized.append(can)
+        else:
+            unmatched.append(tok)
+
+    st.markdown("---")
+    st.markdown("#### ✅ Recognized Symptoms")
+    if recognized:
+        st.success(", ".join(sorted(recognized)))
     else:
-        st.warning("No matching disease found. Try a different name.")
+        st.info("No valid symptoms recognized. Try the selector or reword your input.")
+
+    if unmatched:
+        st.warning("Auto-corrected / unrecognized inputs: " + ", ".join(unmatched))
+
+    if len(recognized) < min_symptoms_needed:
+        st.error(f"Add at least {min_symptoms_needed} symptom(s) to predict.")
+        st.stop()
+
+    X = symptoms_to_vector(recognized, FEATURES)
+    try:
+        proba = model.predict_proba([X])[0]
+        raw_classes = list(model.classes_)
+    except Exception as e:
+        st.error(f"Model prediction failed: {e}")
+        st.stop()
+
+    # map class labels to normalized disease keys
+    def map_label_to_norm(label):
+        try:
+            if isinstance(label, bytes):
+                label = label.decode()
+        except Exception:
+            pass
+        s = str(label)
+        ns = norm(s)
+        if ns in norm2orig:
+            return ns
+        # try numeric index
+        try:
+            idx = int(float(s))
+            if 0 <= idx < len(DISEASE_NORM_LIST):
+                return DISEASE_NORM_LIST[idx]
+        except Exception:
+            pass
+        # substring match
+        for k in DISEASE_NORM_LIST:
+            if ns in k or k in ns:
+                return k
+        # fuzzy fallback
+        if fuzz_process is not None and DISEASE_NORM_LIST:
+            best = fuzz_process.extractOne(ns, DISEASE_NORM_LIST)
+            if best and best[1] >= 60:
+                return best[0]
+        return ns
+
+    mapped_norms = [map_label_to_norm(c) for c in raw_classes]
+    mapped_names = [norm2orig.get(k, str(raw_classes[i])) for i, k in enumerate(mapped_norms)]
+
+    k = min(3, len(mapped_names))
+    top_idx = np.argsort(proba)[-k:][::-1]
+    top = [(mapped_norms[i], mapped_names[i], float(proba[i])) for i in top_idx]
+
+    if top and (top[0][2] * 100) < min_prob_warn:
+        st.warning(f"Low confidence (top {top[0][2]*100:.1f}%). Consider adding more symptoms.")
+
+    st.subheader("🤖 AI Predictions (Top 3)")
+    for rank, (norm_key, display_name, p) in enumerate(top, start=1):
+        left, right = st.columns([3, 1])
+        left.markdown(f"**{rank}. {display_name}** — Confidence: `{p*100:.2f}%`")
+        left.progress(min(max(int(p * 100), 0), 100))
+        if right.button("View Info", key=f"view_{rank}"):
+            st.session_state["selected_disease_norm"] = norm_key
+            st.session_state["disease_search"] = norm2orig.get(norm_key, display_name)
+
+    st.info("ℹ️ Predictions are probabilistic. Use the 'View Info' button or the search box below to get care tips.")
+
+# ----------------------
+# Disease info display (clean bullets, no indices)
+# ----------------------
+# Use either the selected (clicked) disease or typed search value
+selected_norm = st.session_state.get("selected_disease_norm")
+# disease search input (prefilled if a predicted disease was clicked)
+disease_search = st.text_input("Type a disease name:", value=st.session_state.get("disease_search", ""))
+if disease_search and not selected_norm:
+    # try to resolve typed name to a normalized key
+    qk = None
+    nq = norm(disease_search)
+    if nq in norm2orig:
+        qk = nq
+    else:
+        # substring or fuzzy
+        for k in DISEASE_NORM_LIST:
+            if nq in k or k in nq:
+                qk = k
+                break
+        if qk is None and fuzz_process is not None and DISEASE_NORM_LIST:
+            best = fuzz_process.extractOne(nq, DISEASE_NORM_LIST)
+            if best and best[1] >= 60:
+                qk = best[0]
+    if qk:
+        selected_norm = qk
+        st.session_state["selected_disease_norm"] = qk
+        st.session_state["disease_search"] = norm2orig.get(qk, disease_search)
+
+if selected_norm:
+    sel = norm2orig.get(selected_norm, None) or st.session_state.get("disease_search")
+    st.markdown("---")
+    st.subheader(f"🩺 Disease: {sel}")
+
+    # description
+    desc = disease_description.get(selected_norm, "No description available.")
+    if desc:
+        st.write(desc)
+
+    # Precautions
+    prec = disease_precautions.get(selected_norm, [])
+    if prec:
+        with st.expander("🔐 Precautions"):
+            for p in prec:
+                st.markdown(f"- {p}")
+
+    # Medications
+    meds = disease_medications.get(selected_norm, [])
+    if meds:
+        with st.expander("💊 Medications"):
+            for m in meds:
+                st.markdown(f"- {m}")
+
+    # Diet
+    diet = disease_diets.get(selected_norm, [])
+    if diet:
+        with st.expander("🥗 Recommended Diet"):
+            for d in diet:
+                st.markdown(f"- {d}")
+
+    # Exercises
+    work = disease_exercises.get(selected_norm, [])
+    if work:
+        with st.expander("🏃 Recommended Exercises"):
+            for w in work:
+                st.markdown(f"- {w}")
+
+    st.info("ℹ️ This information is for educational purposes only. Consult a healthcare professional for diagnosis and treatment.")
+
+# Footer note
+st.markdown("\n---\n*App by MediAssist — not a substitute for professional medical advice.*")
