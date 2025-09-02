@@ -1,439 +1,446 @@
+# mediassist_heart_assessment_clean.py
 import streamlit as st
 import pandas as pd
 import numpy as np
 import pickle as pkl
 from PIL import Image
-import io
-from lightgbm import LGBMClassifier
-import category_encoders as ce
-from imblearn.ensemble import EasyEnsembleClassifier
-import shap
 import plotly.express as px
+import shap
 import warnings
-warnings.simplefilter(action='ignore', category=UserWarning)
+from pathlib import Path
+from lightgbm import LGBMClassifier
 
+warnings.simplefilter(action="ignore", category=UserWarning)
 
-# Load the pickled model and encoder
-with open('models/third_feature_models/best_model.pkl', 'rb') as model_file:
-    model = pkl.load(model_file)
+# -----------------------
+# Utility functions
+# -----------------------
+def safe_load_pickle(path: Path):
+    try:
+        with open(path, "rb") as f:
+            return pkl.load(f)
+    except Exception as e:
+        st.error(f"Failed to load {path}: {e}")
+        st.stop()
 
-with open('models/third_feature_models/cbe_encoder.pkl', 'rb') as encoder_file:
-    encoder = pkl.load(encoder_file)
+def select_with_placeholder(label, options, key=None, placeholder="Select..."):
+    opts = [placeholder] + options
+    return st.selectbox(label, opts, index=0, key=key)
 
-# Load the dataset for reference
-data = pd.read_csv('models/third_feature_models/brfss2022_data_wrangling_output.zip', compression='zip')
-data['heart_disease'] = data['heart_disease'].apply(lambda x: 1 if x == 'yes' else 0).astype('int')
+def find_expected_raw_cols(enc):
+    """
+    Best-effort to detect the encoder's expected raw columns (before encoding).
+    Many category-encoders have `.cols` or `.feature_names_in_`.
+    """
+    try:
+        if hasattr(enc, "cols") and getattr(enc, "cols") is not None:
+            return list(enc.cols)
+    except Exception:
+        pass
+    try:
+        if hasattr(enc, "feature_names_in_") and getattr(enc, "feature_names_in_") is not None:
+            return list(enc.feature_names_in_)
+    except Exception:
+        pass
+    # fallback to common full set from this project (22 columns)
+    return [
+        'gender', 'race', 'general_health', 'health_care_provider',
+        'could_not_afford_to_see_doctor', 'length_of_time_since_last_routine_checkup',
+        'ever_diagnosed_with_heart_attack', 'ever_diagnosed_with_a_stroke',
+        'ever_told_you_had_a_depressive_disorder', 'ever_told_you_have_kidney_disease',
+        'ever_told_you_had_diabetes', 'BMI', 'difficulty_walking_or_climbing_stairs',
+        'physical_health_status', 'mental_health_status', 'asthma_Status',
+        'smoking_status', 'binge_drinking_status', 'exercise_status_in_past_30_Days',
+        'age_category', 'sleep_category', 'drinks_category'
+    ]
 
-icon = Image.open("utils/heart_disease.jpg")
-st.set_page_config(
-    layout='wide', 
-    page_title='Heart Disease Assessment', 
-    page_icon=icon,
-    menu_items={},  # This removes the burger menu
-    initial_sidebar_state='expanded'
-)
+def ensure_df_from_encoded(encoded, encoder, model=None):
+    """Return a DataFrame from encoder.transform output; try to infer columns."""
+    if isinstance(encoded, pd.DataFrame):
+        return encoded.copy()
+    arr = np.asarray(encoded)
+    cols = None
+    try:
+        if hasattr(encoder, "get_feature_names_out"):
+            cols = list(encoder.get_feature_names_out())
+    except Exception:
+        cols = None
+    if cols is None and model is not None and hasattr(model, "feature_names_in_"):
+        try:
+            cols = list(model.feature_names_in_)
+        except Exception:
+            cols = None
+    if cols is None:
+        cols = [f"f{i}" for i in range(arr.shape[1])]
+    return pd.DataFrame(arr, columns=cols)
 
+def find_lgbm(est):
+    try:
+        # if ensemble or wrapper, try to find underlying LGBM
+        candidate = est
+        if hasattr(est, "estimators_") and len(est.estimators_) > 0:
+            candidate = est.estimators_[0]
+        if hasattr(candidate, "steps"):
+            for _, s in reversed(candidate.steps):
+                if isinstance(s, LGBMClassifier):
+                    return s
+                if hasattr(s, "predict_proba") and hasattr(s, "feature_importances_"):
+                    return s
+        if isinstance(candidate, LGBMClassifier):
+            return candidate
+    except Exception:
+        pass
+    return None
 
-# Hide deploy button and menu
+# -----------------------
+# Paths & load model/encoder
+# -----------------------
+MODEL_PATH = Path("models/third_feature_models/best_model.pkl")
+ENCODER_PATH = Path("models/third_feature_models/cbe_encoder.pkl")
+
+if not MODEL_PATH.exists() or not ENCODER_PATH.exists():
+    st.error("Model or encoder not found. Put best_model.pkl and cbe_encoder.pkl into models/third_feature_models/")
+    st.stop()
+
+model = safe_load_pickle(MODEL_PATH)
+encoder = safe_load_pickle(ENCODER_PATH)
+
+# Determine expected raw columns (order matters for encoder)
+EXPECTED_RAW_COLS = find_expected_raw_cols(encoder)
+
+# Sensible defaults (used if user leaves optional blank)
+DEFAULTS = {
+    'gender': 'male',
+    'race': 'white_only_non_hispanic',
+    'general_health': 'good',
+    'health_care_provider': 'yes_only_one',
+    'could_not_afford_to_see_doctor': 'no',
+    'length_of_time_since_last_routine_checkup': 'past_year',
+    'ever_diagnosed_with_heart_attack': 'no',
+    'ever_diagnosed_with_a_stroke': 'no',
+    'ever_told_you_had_a_depressive_disorder': 'no',
+    'ever_told_you_have_kidney_disease': 'no',
+    'ever_told_you_had_diabetes': 'no',
+    'BMI': 'normal_weight_bmi_18_5_to_24_9',
+    'difficulty_walking_or_climbing_stairs': 'no',
+    'physical_health_status': 'zero_days_not_good',
+    'mental_health_status': 'zero_days_not_good',
+    'asthma_Status': 'never_asthma',
+    'smoking_status': 'never_smoked',
+    'binge_drinking_status': 'no',
+    'exercise_status_in_past_30_Days': 'yes',
+    'age_category': 'Age_40_to_44',
+    'sleep_category': 'normal_sleep_6_to_8_hours',
+    'drinks_category': 'did_not_drink'
+}
+
+# -----------------------
+# Mapping dictionaries (user-friendly -> model labels)
+# -----------------------
+age_map = {
+    "18–24 years": "Age_18_to_24",
+    "25–29 years": "Age_25_to_29",
+    "30–34 years": "Age_30_to_34",
+    "35–39 years": "Age_35_to_39",
+    "40–44 years": "Age_40_to_44",
+    "45–49 years": "Age_45_to_49",
+    "50–54 years": "Age_50_to_54",
+    "55–59 years": "Age_55_to_59",
+    "60–64 years": "Age_60_to_64",
+    "65–69 years": "Age_65_to_69",
+    "70–74 years": "Age_70_to_74",
+    "75–79 years": "Age_75_to_79",
+    "80+ years": "Age_80_or_older"
+}
+
+bmi_map = {
+    "Underweight (BMI < 18.5)": "underweight_bmi_less_than_18_5",
+    "Normal (18.5 – 24.9)": "normal_weight_bmi_18_5_to_24_9",
+    "Overweight (25 – 29.9)": "overweight_bmi_25_to_29_9",
+    "Obese (30+)": "obese_bmi_30_or_more"
+}
+
+gender_map = {"Male": "male", "Female": "female", "Non-binary": "nonbinary"}
+
+yesno_map = {"Yes": "yes", "No": "no"}
+
+smoke_map = {"Never smoked": "never_smoked", "Used to smoke": "former_smoker", "Currently smoke": "current_smoker_every_day"}
+
+sleep_map = {
+    "0–3 hours": "very_short_sleep_0_to_3_hours",
+    "4–5 hours": "short_sleep_4_to_5_hours",
+    "6–8 hours (normal)": "normal_sleep_6_to_8_hours",
+    "9+ hours": "long_sleep_9_to_10_hours"
+}
+
+alcohol_map = {"I don't drink": "did_not_drink", "1–7 drinks/week": "very_low_consumption_0.01_to_1_drinks", "8+ drinks/week": "high_consumption_10.01_to_20_drinks"}
+
+general_health_map = {"Excellent": "excellent", "Very good": "very_good", "Good": "good", "Fair": "fair", "Poor": "poor"}
+
+# -----------------------
+# Page style & layout
+# -----------------------
+try:
+    icon = Image.open("utils/heart_disease.jpg")
+except Exception:
+    icon = None
+
+st.set_page_config(page_title="MediAssist — Heart Disease Risk", layout="wide", page_icon=icon)
 st.markdown("""
     <style>
-        #MainMenu {visibility: hidden;}
-        div.stDeployButton {display: none;}
-        footer {visibility: hidden;}
-        .stDeployButton {display: none;}
-        .streamlit-expanderHeader {display: none;}
-        div[data-testid="stToolbar"] {display: none !important;}
-        button[kind="menuButton"] {display: none;}
+      /* Clean dark-card look */
+      .card { background: linear-gradient(90deg, #0b0f1a, #0f1724); padding: 18px; border-radius: 12px; box-shadow: rgba(0,0,0,0.4) 0px 4px 20px; color: #e6eef8 }
+      .muted { color: #9aa7b2; font-size: 0.95rem }
+      .big-btn { display:block; width:100%; padding:12px; border-radius:10px; background:linear-gradient(90deg,#ff6b6b,#ff8a5c); color:white; font-weight:600; border:none; }
     </style>
-    """, unsafe_allow_html=True)
-st.sidebar.markdown("<h2 style='color: #ffffff;'>📌  Description</h2>", unsafe_allow_html=True)
-st.sidebar.image("utils/ph5.png", use_container_width=True)
-st.sidebar.markdown("<p class='sidebar-text'>This system analyzes health data, lifestyle, and medical history using AI and machine learning to predict heart disease risk and provide personalized recommendations for improving cardiovascular health.</p>", unsafe_allow_html=True)
-
-
-# Custom CSS
-def local_css(file_name):
-    with open(file_name) as f:
-        st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
-
-local_css("utils/style_v1.css")
-
-# Main layout with three columns
-row0_0, row0_1, row0_2, row0_3 = st.columns((0.08, 6, 3, 0.17))
-with row0_1:
-    st.title("MediAssist - Heart Disease Assessment")
-    st.write("Unmatched Accuracy with Cutting-Edge Machine Learning Models")
-st.write('---')
-
-# Flexbox container for equal height boxes
-st.markdown("""
-<div class="flex-container">
-    <div class="flex-item introduction">
-        <h2>Introduction</h2>
-        <p>The AI-Powered Heart Disease Risk Assessment App provides users with tailored risk scores and actionable recommendations to help mitigate their heart disease risk. Using advanced AI and modeling techniques, this app offers easy-to-understand assessments and preventive measures to make safeguarding your cardiovascular health straightforward and accessible.</p>
-    </div>
-    <div class="flex-item how-it-works">
-        <h2>How it works</h2>
-        <ul>
-            <li><strong>User Input:</strong> Enter your health information, such as age, BMI, physical activity levels, smoking status, and medical history (e.g., heart attacks, strokes, diabetes).</li>
-            <li><strong>Data Analysis:</strong> The app analyzes your input using advanced AI models specifically designed for heart disease risk prediction.</li>
-            <li><strong>Risk Assessment:</strong> Receive a personalized risk score indicating your potential for heart disease.</li>
-            <li><strong>Recommendations:</strong> Get actionable advice to mitigate your risk, including lifestyle modification suggestions.</li>
-        </ul>
-    </div>
-</div>
 """, unsafe_allow_html=True)
 
-st.write('---')
+# Sidebar
+st.sidebar.image("utils/ph5.png", use_container_width=True)
+st.sidebar.header("About MediAssist")
+st.sidebar.write("AI-based heart disease risk assessment. This is educational only — consult a doctor for medical advice.")
 
-# User input section
-row1_0, row1_1, row1_2, row1_3, row1_5 = st.columns((0.08, 3, 3, 3, 0.17))
-with row1_1:
-    st.write("#### Demographics")
-row2_0, row2_1, row2_2, row2_3, row2_5 = st.columns((0.08, 3, 3, 3, 0.17))
+# Title
+st.title("🩺 MediAssist — Quick Heart Disease Risk Check")
+st.write("Answer a few simple questions — it only takes ~1 minute. The app will show a risk percentage, the main contributing factors, and easy-to-follow recommendations.")
+st.write("---")
 
-gender = row2_1.selectbox("What is your gender?", ["female", "male", "nonbinary"], index=1)
-race = row2_2.selectbox("What is your race/ethnicity?", [
-    "white_only_non_hispanic", "black_only_non_hispanic", "asian_only_non_hispanic", 
-    "american_indian_or_alaskan_native_only_non_hispanic", "multiracial_non_hispanic", 
-    "hispanic", "native_hawaiian_or_other_pacific_islander_only_non_hispanic"
-], index=0)
-age_category = row2_3.selectbox("What is your age group?", [
-    "Age_18_to_24", "Age_25_to_29", "Age_30_to_34", "Age_35_to_39", 
-    "Age_40_to_44", "Age_45_to_49", "Age_50_to_54", "Age_55_to_59",
-    "Age_60_to_64", "Age_65_to_69", "Age_70_to_74", "Age_75_to_79",
-    "Age_80_or_older"
-], index=4)
+# -----------------------
+# Inputs (user-friendly, placeholder-first)
+# -----------------------
+left, right = st.columns([2, 3])
 
-row3_0, row3_1, row3_2, row3_3, row3_5 = st.columns((0.08, 3, 3, 3, 0.17))
-with row3_1:
-    st.write("#### Medical History")
+with left:
+    st.header("👤 About you")
+    gender_sel = select_with_placeholder("What is your gender?", ["Male", "Female", "Non-binary"], key="gender_sel")
+    age_sel = select_with_placeholder("What is your age range?", list(age_map.keys()), key="age_sel")
+    health_sel = select_with_placeholder("How would you rate your overall health?", list(general_health_map.keys()), key="health_sel")
 
-row4_0, row4_1, row4_2, row4_3, row4_5 = st.columns((0.08, 3, 3, 3, 0.17))
+    st.write("")  # spacing
+    st.header("🩺 Medical")
+    diabetes_sel = select_with_placeholder("Have you been told you have diabetes?", ["Yes", "No"], key="diabetes_sel")
+    heartattack_sel = select_with_placeholder("Have you had a heart attack before?", ["Yes", "No"], key="heartattack_sel")
+    cholesterol_sel = select_with_placeholder("Do you have high cholesterol (doctor told you)?", ["Yes", "No"], key="chol_sel")
 
-general_health = row4_1.selectbox("How would you rate your overall health?", ["excellent", "very_good", "good", "fair", "poor"], index=0)
-heart_attack = row4_1.selectbox("Have you ever been diagnosed with a heart attack?", ["yes", "no"], index=1, help="A heart attack occurs when blood flow to part of the heart is blocked!")
-kidney_disease = row4_1.selectbox("Has a doctor ever told you that you have kidney disease?", ["yes", "no"], index=1)
-asthma = row4_1.selectbox("Have you ever been diagnosed with asthma?", ["never_asthma", "current_asthma", "former_asthma"], index=0)
-could_not_afford_to_see_doctor = row4_1.selectbox("Have you ever been unable to see a doctor when needed due to cost?", ["yes", "no"], index=1)
-health_care_provider = row4_2.selectbox("Do you have a primary health care provider?", ["yes_only_one", "more_than_one", "no"], index=0)
-stroke = row4_2.selectbox("Have you ever been diagnosed with a stroke?", ["yes", "no"], index=1, help="A stroke happens when blood supply to part of the brain is interrupted!")
-diabetes = row4_2.selectbox("Have you ever been diagnosed with diabetes?", ["yes", "no", "no_prediabetes", "yes_during_pregnancy"], index=1)
-bmi = row4_2.selectbox("What is your body mass index (BMI)?", [
-    "underweight_bmi_less_than_18_5", "normal_weight_bmi_18_5_to_24_9", "overweight_bmi_25_to_29_9",  
-    "obese_bmi_30_or_more"
-], index=1, help="BMI is a measure of body fat based on height and weight. Please use the BMI calculator at https://www.nhlbi.nih.gov/health/educational/lose_wt/BMI/bmicalc.htm")
-length_of_time_since_last_routine_checkup = row4_2.selectbox("How long has it been since your last routine checkup?", ["past_year", "past_2_years", "past_5_years", "5+_years_ago", "never"], index=0)
-depressive_disorder = row4_3.selectbox("Has a doctor ever told you that you have a depressive disorder?", ["yes", "no"], index=1, help="A depressive disorder is a medical condition characterized by persistent feelings of sadness, loss of interest, and other emotional and physical symptoms!")
-physical_health = row4_3.selectbox("How many days in the past 30 days was your physical health not good?", ["zero_days_not_good", "1_to_13_days_not_good", "14_plus_days_not_good"], index=0)
-mental_health = row4_3.selectbox("How many days in the past 30 days was your mental health not good?", ["zero_days_not_good", "1_to_13_days_not_good", "14_plus_days_not_good"], index=0)
-walking = row4_3.selectbox("Do you have difficulty walking or climbing stairs?", ["yes", "no"], index=1)
+with right:
+    st.header("🏃 Lifestyle")
+    bmi_sel = select_with_placeholder("Which best describes your weight?", list(bmi_map.keys()), key="bmi_sel")
+    smoking_sel = select_with_placeholder("Do you smoke?", ["Never smoked", "Used to smoke", "Currently smoke"], key="smoke_sel")
+    exercise_sel = select_with_placeholder("Did you do physical activity/exercise in the past 30 days?", ["Yes", "No"], key="exercise_sel")
+    sleep_sel = select_with_placeholder("How many hours of sleep do you usually get?", list(sleep_map.keys()), key="sleep_sel")
+    alcohol_sel = select_with_placeholder("Do you drink alcohol?", list(alcohol_map.keys()), key="alcohol_sel")
 
-row5_0, row5_1, row5_2, row5_3, row5_5 = st.columns((0.08, 3, 3, 3, 0.17))
-with row5_1:
-    st.write("#### Lifestyle")
+# Advanced optional collected in expander (keeps original fields available)
+with st.expander("Advanced (optional) — more details for a finer score"):
+    colA1, colA2 = st.columns(2)
+    with colA1:
+        race_sel = select_with_placeholder("Your race/ethnicity", ["white_only_non_hispanic", "black_only_non_hispanic", "hispanic", "asian_only_non_hispanic"], key="race_sel")
+        walking_sel = select_with_placeholder("Difficulty walking/climbing stairs?", ["Yes", "No"], key="walk_sel")
+    with colA2:
+        kidney_sel = select_with_placeholder("Ever told you have kidney disease?", ["Yes", "No"], key="kidney_sel")
+        depression_sel = select_with_placeholder("Ever told you have depressive disorder?", ["Yes", "No"], key="dep_sel")
 
-row6_0, row6_1, row6_2, row6_3, row6_5 = st.columns((0.08, 3, 3, 3, 0.17))
-smoking_status = row6_1.selectbox("What is your smoking status?", ["never_smoked", "former_smoker", "current_smoker_some_days", "current_smoker_every_day"], index=0)
-sleep_category = row6_1.selectbox("How many hours of sleep do you get on a typical night?", [
-    "very_short_sleep_0_to_3_hours", "short_sleep_4_to_5_hours", "normal_sleep_6_to_8_hours",  
-    "long_sleep_9_to_10_hours", "very_long_sleep_11_or_more_hours"], index=2)
-drinks_category = row6_2.selectbox("How many alcoholic drinks do you consume in a typical week?", [
-    "did_not_drink", "very_low_consumption_0.01_to_1_drinks", "low_consumption_1.01_to_5_drinks",  
-    "moderate_consumption_5.01_to_10_drinks", "high_consumption_10.01_to_20_drinks", "very_high_consumption_more_than_20_drinks"], index=0)
-binge_drinking_status = row6_2.selectbox("Have you engaged in binge drinking in the past 30 days?", ["yes", "no"], index=1, help="Binge drinking is consuming 5 or more drinks for men, or 4 or more drinks for women, in about 2 hours!")
-exercise_status = row6_3.selectbox("Have you exercised in the past 30 days?", ["yes", "no"], index=0)
+# -----------------------
+# Prepare the raw input (map friendly -> model labels, and fill defaults)
+# -----------------------
+def map_choice(value, mapping, default_key):
+    if not isinstance(value, str) or value.strip() == "Select...":
+        return DEFAULTS.get(default_key)
+    return mapping.get(value, value)  # if already a model label, pass through
 
-with row6_1:
-    st.write("#### Learn More")
-    st.markdown("[![](https://img.shields.io/badge/GitHub%20-Features%20Information-informational)](https://github.com/aniketkelwa29/MediAssist)")
+def build_raw_input():
+    # Map friendly selections into dataset labels
+    raw = {}
+    # Demographics & medical
+    raw['gender'] = map_choice(gender_sel, gender_map, 'gender')
+    raw['age_category'] = map_choice(age_sel, age_map, 'age_category')
+    raw['general_health'] = map_choice(health_sel, general_health_map, 'general_health')
+    raw['ever_told_you_had_diabetes'] = map_choice(diabetes_sel, yesno_map, 'ever_told_you_had_diabetes')
+    raw['ever_diagnosed_with_heart_attack'] = map_choice(heartattack_sel, yesno_map, 'ever_diagnosed_with_heart_attack')
+    raw['ever_told_you_have_kidney_disease'] = map_choice(kidney_sel if 'kidney_sel' in locals() else None, yesno_map, 'ever_told_you_have_kidney_disease')
+    raw['ever_told_you_had_a_depressive_disorder'] = map_choice(depression_sel if 'dep_sel' in locals() else None, yesno_map, 'ever_told_you_had_a_depressive_disorder')
+    # Lifestyle
+    raw['BMI'] = map_choice(bmi_sel, bmi_map, 'BMI')
+    raw['smoking_status'] = map_choice(smoking_sel, smoke_map, 'smoking_status')
+    raw['exercise_status_in_past_30_Days'] = map_choice(exercise_sel, yesno_map, 'exercise_status_in_past_30_Days')
+    raw['sleep_category'] = map_choice(sleep_sel, sleep_map, 'sleep_category')
+    raw['drinks_category'] = map_choice(alcohol_sel, alcohol_map, 'drinks_category')
+    raw['race'] = map_choice(race_sel if 'race_sel' in locals() else None, {}, 'race')
+    raw['difficulty_walking_or_climbing_stairs'] = map_choice(walking_sel if 'walk_sel' in locals() else None, yesno_map, 'difficulty_walking_or_climbing_stairs')
+    # Fill all expected raw columns in correct order with defaults where needed
+    df = pd.DataFrame([raw])
+    for col in EXPECTED_RAW_COLS:
+        if col not in df.columns:
+            df[col] = DEFAULTS.get(col, "")
+    # reorder
+    df = df[EXPECTED_RAW_COLS]
+    # Replace any placeholder-ish values
+    for col in df.columns:
+        v = df.at[0, col]
+        if isinstance(v, str) and v.strip() in ("", "Select...", "None"):
+            df.at[0, col] = DEFAULTS.get(col, "")
+    return df
 
-# Collect input data
-input_data = {
-    'gender': gender,
-    'race': race,
-    'general_health': general_health,
-    'health_care_provider': health_care_provider,
-    'could_not_afford_to_see_doctor': could_not_afford_to_see_doctor,
-    'length_of_time_since_last_routine_checkup': length_of_time_since_last_routine_checkup,
-    'ever_diagnosed_with_heart_attack': heart_attack,
-    'ever_diagnosed_with_a_stroke': stroke,
-    'ever_told_you_had_a_depressive_disorder': depressive_disorder,
-    'ever_told_you_have_kidney_disease': kidney_disease,
-    'ever_told_you_had_diabetes': diabetes,
-    'BMI': bmi,
-    'difficulty_walking_or_climbing_stairs': walking,
-    'physical_health_status': physical_health,
-    'mental_health_status': mental_health,
-    'asthma_Status': asthma,
-    'smoking_status': smoking_status,
-    'binge_drinking_status': binge_drinking_status,
-    'exercise_status_in_past_30_Days': exercise_status,
-    'age_category': age_category,
-    'sleep_category': sleep_category,
-    'drinks_category': drinks_category
-}
-def predict_heart_disease_risk(input_data, model, encoder):
-    input_df = pd.DataFrame([input_data])
+# -----------------------
+# Predict button & logic
+# -----------------------
+st.write("")  # spacer
+predict_col1, predict_col2, predict_col3 = st.columns([1, 2, 1])
+with predict_col2:
+    run_btn = st.button("🚀 Get My Risk Assessment", use_container_width=True)
 
-    # Encode input data
-    input_encoded = pd.DataFrame(encoder.transform(input_df), columns=encoder.get_feature_names_out())
+if run_btn:
+    # basic check: ensure minimal required fields (these are user-friendly ones)
+    missing = []
+    required_pairs = {
+        "Gender": gender_sel, "Age": age_sel, "Weight category": bmi_sel,
+        "Smoking": smoking_sel, "Exercise": exercise_sel, "General health": health_sel
+    }
+    for label, val in required_pairs.items():
+        if not isinstance(val, str) or val.strip() == "Select...":
+            missing.append(label)
+    if missing:
+        st.error("Please answer: " + ", ".join(missing) + " (top-left)")
+    else:
+        input_raw_df = build_raw_input()
+        st.markdown("**Preparing input…**")
+        try:
+            # transform with encoder (defensive)
+            enc_out = encoder.transform(input_raw_df)
+            encoded_df = ensure_df_from_encoded(enc_out, encoder, model)
+            # Align encoded_df with model if possible
+            if hasattr(model, "feature_names_in_"):
+                encoded_df = encoded_df.reindex(columns=list(model.feature_names_in_), fill_value=0)
+        except Exception as e:
+            # try to ensure we send exactly EXPECTED_RAW_COLS to encoder
+            try:
+                input_raw_df = input_raw_df[EXPECTED_RAW_COLS]
+                enc_out = encoder.transform(input_raw_df)
+                encoded_df = ensure_df_from_encoded(enc_out, encoder, model)
+                if hasattr(model, "feature_names_in_"):
+                    encoded_df = encoded_df.reindex(columns=list(model.feature_names_in_), fill_value=0)
+            except Exception as e2:
+                st.error(f"Encoder transform failed: {e2}")
+                st.stop()
 
-    # Ensure column names match what the model expects
-    expected_features = encoder.get_feature_names_out()
-    input_encoded = input_encoded.reindex(columns=expected_features, fill_value=0)  # Ensure correct ordering
+        # prediction
+        try:
+            proba = model.predict_proba(encoded_df)[:, 1][0] * 100.0
+        except Exception as e:
+            st.error(f"Model prediction failed: {e}")
+            st.stop()
 
-    # Make prediction
-    prediction = model.predict_proba(input_encoded)[:, 1][0] * 100
-    return prediction
+        # nice result card
+        risk_level = "Low"
+        color = "#16a34a"
+        if proba > 70:
+            risk_level = "Very High"
+            color = "#dc2626"
+        elif proba > 40:
+            risk_level = "High"
+            color = "#f97316"
+        elif proba > 25:
+            risk_level = "Moderate"
+            color = "#f59e0b"
 
+        st.markdown(f"""
+            <div class="card">
+              <h2 style="margin:0;color:{color}">Risk: {proba:.1f}% — {risk_level}</h2>
+              <p class="muted">This is an AI estimate. Always consult a medical professional for diagnosis.</p>
+            </div>
+        """, unsafe_allow_html=True)
 
-st.write('---')
-row8_0, row8_1, row8_2, row8_5 = st.columns((0.08, 7, 5, 0.27))
+        # compute feature contributions (SHAP or fallback)
+        lgbm = find_lgbm(model)
+        feat_df = None
+        if lgbm is not None:
+            try:
+                explainer = shap.TreeExplainer(lgbm)
+                shap_vals = explainer.shap_values(encoded_df)
+                if isinstance(shap_vals, list) and len(shap_vals) >= 2:
+                    sv = np.asarray(shap_vals[1])
+                else:
+                    sv = np.asarray(shap_vals)
+                abs_mean = np.mean(np.abs(sv), axis=0)
+                total = abs_mean.sum()
+                if total == 0 or np.isnan(total):
+                    abs_pct = np.ones_like(abs_mean) / len(abs_mean) * 100
+                else:
+                    abs_pct = (abs_mean / total) * 100
+                feat_df = pd.DataFrame({"Feature": encoded_df.columns, "Importance": np.round(abs_pct, 2)}).sort_values("Importance", ascending=False)
+            except Exception:
+                feat_df = None
 
-with row8_1:
-    st.write("#### MediAssist : Heart Disease Risk Assessment")
+        # fallback to model.feature_importances_
+        if (feat_df is None or feat_df.empty) and hasattr(lgbm, "feature_importances_"):
+            try:
+                fi = np.array(lgbm.feature_importances_, dtype=float)
+                total = fi.sum()
+                if total == 0:
+                    fi_pct = np.ones_like(fi) / len(fi) * 100
+                else:
+                    fi_pct = (fi / total) * 100
+                feat_df = pd.DataFrame({"Feature": encoded_df.columns, "Importance": np.round(fi_pct, 2)}).sort_values("Importance", ascending=False)
+            except Exception:
+                feat_df = None
 
-btn1 = row8_1.button('Get Your Heart disease Risk Assessment')
+        # Show top contributors chart and friendly recommendations
+        if feat_df is not None and not feat_df.empty:
+            topn = min(6, feat_df.shape[0])
+            top_df = feat_df.head(topn).copy()
+            other = max(0.0, 100 - top_df['Importance'].sum())
+            # replaced deprecated append() with pd.concat()
+            other_row = pd.DataFrame([{"Feature": "Other Factors", "Importance": np.round(other, 2)}])
+            top_df2 = pd.concat([top_df, other_row], ignore_index=True)
 
-if btn1:
-    try:
-        risk = predict_heart_disease_risk(input_data, model, encoder)
-        with row8_1:
-            st.write(f"Predicted Heart Disease Risk: {risk:.2f}%")
-            input_df = pd.DataFrame([input_data])
-            input_encoded = encoder.transform(input_df, y=None, override_return_df=False)
+            st.markdown("### What contributed most to this score")
+            fig = px.pie(top_df2, names="Feature", values="Importance", title="Top contributors")
+            st.plotly_chart(fig, use_container_width=True)
 
-            # Access LGBMClassifier inside EasyEnsembleClassifier
-            lgbm_model = model.estimators_[0].steps[-1][1]
-
-            # Create a SHAP explainer for LightGBM
-            explainer = shap.TreeExplainer(lgbm_model)
-
-            # Compute SHAP values for input data
-            shap_values = explainer.shap_values(input_encoded)
-
-            # Ensure shap_values is in the correct format
-            shap_matrix = np.array(shap_values)
-
-            # Ensure it's 2D
-            if len(shap_matrix.shape) == 1:
-                shap_matrix = np.expand_dims(shap_matrix, axis=1)
-
-            # Compute feature importances correctly
-            feature_importances = np.abs(shap_matrix).mean(axis=0)  # Take mean across all samples
-
-            # Ensure we are not dividing by zero
-            total_importance = feature_importances.sum()
-
-            if total_importance == 0 or np.isnan(total_importance):
-                print("Warning: Feature importances sum to zero or NaN. Assigning uniform values.")
-                feature_importances = np.ones_like(feature_importances) / len(feature_importances) * 100  # Assign equal importance
+            # Simple natural language recommendations (based on top features + user answers)
+            recs = []
+            if proba > 70:
+                recs.append("Your risk is very high — please consult a healthcare professional promptly.")
+            elif proba > 40:
+                recs.append("Your risk is high — schedule a medical checkup and focus on these lifestyle changes.")
+            elif proba > 25:
+                recs.append("Your risk is moderate — small changes in diet and activity can help reduce risk.")
             else:
-                feature_importances = (feature_importances / total_importance) * 100
+                recs.append("Your risk is low — keep maintaining healthy habits!")
 
-            # Round for readability
-            feature_importances = np.round(feature_importances, 2)
+            top_features = list(top_df['Feature'].head(5).values)
+            # friendly checks:
+            if "ever_told_you_had_diabetes" in encoded_df.columns and input_raw_df.at[0, 'ever_told_you_had_diabetes'] == "yes":
+                recs.append("- Manage diabetes well: medication adherence, diet, and glucose monitoring.")
+            if "ever_diagnosed_with_heart_attack" in encoded_df.columns and input_raw_df.at[0, 'ever_diagnosed_with_heart_attack'] == "yes":
+                recs.append("- Prior heart attack: regular follow-up with cardiologist and medication adherence.")
+            # smoking check: input may contain 'current_smoker_every_day' so look for 'current_smoker'
+            if "smoking_status" in encoded_df.columns and ("current_smoker" in input_raw_df.at[0, 'smoking_status']):
+                recs.append("- Quitting smoking will substantially reduce heart risk.")
+            if "exercise_status_in_past_30_Days" in encoded_df.columns and input_raw_df.at[0, 'exercise_status_in_past_30_Days'] == "no":
+                recs.append("- Increase physical activity: aim for 30 minutes most days.")
+            if "BMI" in encoded_df.columns and ("obese" in input_raw_df.at[0, 'BMI'] or "overweight" in input_raw_df.at[0, 'BMI']):
+                recs.append("- Weight management: balanced diet & exercise can help lower risk.")
+            if "sleep_category" in encoded_df.columns and input_raw_df.at[0, 'sleep_category'] in ("very_short_sleep_0_to_3_hours", "short_sleep_4_to_5_hours"):
+                recs.append("- Improve sleep: aim for consistent 6–8 hours/night.")
 
+            # deduplicate
+            final = []
+            seen = set()
+            for r in recs:
+                if r not in seen:
+                    final.append(r); seen.add(r)
 
-            # Store feature importances in DataFrame
-            feature_importance_df = pd.DataFrame({
-                'Feature': input_encoded.columns,  # Ensure correct feature names
-                'Importance': feature_importances
-            }).sort_values(by='Importance', ascending=False)
-
-
-            recommendations = []
-            if risk > 70:
-                recommendations.append("Your risk of heart disease is very high. Here are some recommendations to reduce your risk:")
-            elif risk > 40:
-                recommendations.append("Your risk of heart disease is high. Here are some recommendations to reduce your risk:")
-            elif risk > 25:
-                recommendations.append("Your risk of heart disease is moderate. Here are some recommendations to reduce your risk:")
+            st.markdown("### Recommendations")
+            for r in final:
+                st.markdown(f"- {r}")
+        else:
+            st.info("Could not compute contributors; showing only risk and general recommendations.")
+            if proba > 50:
+                st.markdown("- High risk: see a doctor.")
+            elif proba > 25:
+                st.markdown("- Moderate risk: consider lifestyle changes.")
             else:
-                recommendations.append("Your risk of heart disease is low. Keep up the good work and continue to maintain a healthy lifestyle.")
+                st.markdown("- Low risk: maintain healthy habits.")
 
-            if risk > 25:
-                cumulative_importance = 0
-                important_features = set()
-                for index, row in feature_importance_df.iterrows():
-                    cumulative_importance += row['Importance']
-                    important_features.add(row['Feature'])
-                    if cumulative_importance >= 50:
-                        break
-                
-                # Ensure unique features are added only once
-                additional_features = [
-                    ('ever_told_you_had_diabetes', diabetes == "yes"),
-                    ('ever_diagnosed_with_heart_attack', heart_attack == "yes"),
-                    ('ever_told_you_had_a_depressive_disorder', depressive_disorder == "yes"),
-                    ('ever_diagnosed_with_a_stroke', stroke == "yes"),
-                    ('age_category', age_category in ["Age_55_to_59", "Age_60_to_64", "Age_65_to_69", "Age_70_to_74", "Age_75_to_79", "Age_80_or_older"]),
-                    ('length_of_time_since_last_routine_checkup', length_of_time_since_last_routine_checkup in ["Age_55_to_59", "Age_60_to_64", "Age_65_to_69", "Age_70_to_74", "Age_75_to_79", "Age_80_or_older"]),
-                    ('general_health', general_health in ["fair", "poor"]),
-                    ('BMI', bmi in ["overweight_bmi_25_to_29_9", "obese_bmi_30_or_more"]),
-                    ('smoking_status', smoking_status != "never_smoked"),
-                    ('exercise_status_in_past_30_Days', exercise_status == "no"),
-                    ('binge_drinking_status', binge_drinking_status == "yes"),
-                    ('drinks_category', drinks_category in ["high_consumption_10.01_to_20_drinks", "very_high_consumption_more_than_20_drinks"]),
-                    ('sleep_category', sleep_category in ["short_sleep_4_to_5_hours", "very_short_sleep_0_to_3_hours"]),
-                    ('physical_health_status', physical_health in ["1_to_13_days_not_good", "14_plus_days_not_good"]),
-                    ('mental_health_status', mental_health in ["1_to_13_days_not_good", "14_plus_days_not_good"]),
-                    ('asthma_Status', asthma in ["current_asthma", "former_asthma"]),
-                    ('difficulty_walking_or_climbing_stairs', walking == "yes"),
-                    ('length_of_time_since_last_routine_checkup', length_of_time_since_last_routine_checkup != "past_year"),
-                    ('could_not_afford_to_see_doctor', could_not_afford_to_see_doctor == "yes"),
-                    ('health_care_provider', health_care_provider == "no"),
-                    ('ever_told_you_have_kidney_disease', kidney_disease == "yes")
-                ]
-
-                for feature, condition in additional_features:
-                    if condition:
-                        important_features.add(feature)
-
-                # Mapping for feature names to user-friendly names
-                feature_name_mapping = {
-                    'ever_diagnosed_with_heart_attack': 'Heart Attack',
-                    'general_health': 'General Health',
-                    'ever_diagnosed_with_a_stroke': 'Stroke',
-                    'ever_told_you_have_kidney_disease': 'Kidney Disease',
-                    'ever_told_you_had_diabetes': 'Diabetes',
-                    'physical_health_status': 'Physical Health',
-                    'ever_told_you_had_a_depressive_disorder': 'Depression',
-                    'sleep_category': 'Sleep',
-                    'age_category': 'Age',
-                    'length_of_time_since_last_routine_checkup': 'Checkup Time',
-                    'BMI': 'BMI',
-                    'smoking_status': 'Smoking',
-                    'exercise_status_in_past_30_Days': 'Exercise',
-                    'binge_drinking_status': 'Binge Drinking',
-                    'drinks_category': 'Alcohol',
-                    'could_not_afford_to_see_doctor': 'Doctor Access',
-                    'health_care_provider': 'Healthcare Provider',
-                    'asthma_Status': 'Asthma',
-                    'difficulty_walking_or_climbing_stairs': 'Mobility',
-                    'mental_health_status': 'Mental Health',
-                }
-
-                # Ensure that the features with recommendations are included in the final features list
-                final_features = []
-                feature_to_recommendation = {}
-                for feature in important_features:
-                    importance = feature_importance_df.loc[feature_importance_df['Feature'] == feature, 'Importance'].values[0]
-                    if feature == 'ever_diagnosed_with_heart_attack' and heart_attack == "yes":
-                        recommendation = f"- History of heart attack contributed {importance:.2f}% to your risk. Regularly visit your cardiologist and adhere to prescribed medications. Monitor any new or worsening symptoms and seek immediate medical attention if needed."
-                        feature_to_recommendation[feature] = recommendation
-                        final_features.append(feature)
-                    if feature == 'ever_diagnosed_with_a_stroke' and stroke == "yes":
-                        recommendation = f"- History of stroke contributed {importance:.2f}% to your risk. Follow your neurologist's recommendations and take prescribed medications consistently. Engage in approved physical therapy or exercises to regain strength and mobility."
-                        feature_to_recommendation[feature] = recommendation
-                        final_features.append(feature)
-                    if feature == 'age_category' and age_category in ["Age_55_to_59", "Age_60_to_64", "Age_65_to_69", "Age_70_to_74", "Age_75_to_79", "Age_80_or_older"]:
-                        recommendation = f"- Age category contributed {importance:.2f}% to your risk. While you can't change your age, maintaining a healthy lifestyle can mitigate risks associated with aging. Ensure regular check-ups, eat a balanced diet, stay active, and avoid smoking."
-                        feature_to_recommendation[feature] = recommendation
-                        final_features.append(feature)
-                    if feature == 'general_health' and general_health in ["fair", "poor"]:
-                        recommendation = f"- General health contributed {importance:.2f}% to your risk. Focus on improving your overall health through a balanced diet and regular check-ups."
-                        feature_to_recommendation[feature] = recommendation
-                        final_features.append(feature)
-                    if feature == 'ever_told_you_have_kidney_disease' and kidney_disease == "yes":
-                        recommendation = f"- Kidney disease contributed {importance:.2f}% to your risk. Regularly monitor your kidney function and follow your doctor's advice to manage your condition. Stay hydrated and maintain a kidney-friendly diet."
-                        feature_to_recommendation[feature] = recommendation
-                        final_features.append(feature)
-                    if feature == 'ever_told_you_had_diabetes' and diabetes == "yes":
-                        recommendation = f"- Diabetes contributed {importance:.2f}% to your risk. Manage your diabetes through diet, exercise, and medication as prescribed by your doctor."
-                        feature_to_recommendation[feature] = recommendation
-                        final_features.append(feature)
-                    if feature == 'smoking_status' and smoking_status != "never_smoked":
-                        recommendation = f"- Smoking status contributed {importance:.2f}% to your risk. Quit smoking to significantly reduce your risk of heart disease."
-                        feature_to_recommendation[feature] = recommendation
-                        final_features.append(feature)
-                    if feature == 'exercise_status_in_past_30_Days' and exercise_status == "no":
-                        recommendation = f"- Lack of exercise contributed {importance:.2f}% to your risk. Engage in regular physical activity to improve your heart health."
-                        feature_to_recommendation[feature] = recommendation
-                        final_features.append(feature)
-                    if feature == 'binge_drinking_status' and binge_drinking_status == "yes":
-                        recommendation = f"- Binge drinking contributed {importance:.2f}% to your risk. Reducing or eliminating alcohol consumption can significantly lower your risk of heart disease. Consider seeking support for alcohol moderation or cessation if needed."
-                        feature_to_recommendation[feature] = recommendation
-                        final_features.append(feature)
-                    if feature == 'drinks_category' and drinks_category in ["high_consumption_10.01_to_20_drinks", "very_high_consumption_more_than_20_drinks"]:
-                        recommendation = f"- Alcohol consumption contributed {importance:.2f}% to your risk. Limit alcohol consumption to lower your risk."
-                        feature_to_recommendation[feature] = recommendation
-                        final_features.append(feature)
-                    if feature == 'sleep_category' and sleep_category in ["short_sleep_4_to_5_hours", "very_short_sleep_0_to_3_hours"]:
-                        recommendation = f"- Sleep category contributed {importance:.2f}% to your risk. Consider aiming for 7-9 hours of quality sleep each night. Adequate sleep is crucial for maintaining heart health."
-                        feature_to_recommendation[feature] = recommendation
-                        final_features.append(feature)
-                    if feature == 'physical_health_status' and physical_health in ["1_to_13_days_not_good", "14_plus_days_not_good"]:
-                        recommendation = f"- Physical health contributed {importance:.2f}% to your risk. Engage in regular physical activity and consult a healthcare provider if you have persistent physical health issues."
-                        feature_to_recommendation[feature] = recommendation
-                        final_features.append(feature)
-                    if feature == 'mental_health_status' and mental_health in ["1_to_13_days_not_good", "14_plus_days_not_good"]:
-                        recommendation = f"- Mental health contributed {importance:.2f}% to your risk. Consider seeking support from a mental health professional and practice stress-reducing activities."
-                        feature_to_recommendation[feature] = recommendation
-                        final_features.append(feature)
-                    if feature == 'asthma_Status' and asthma in ["current_asthma", "former_asthma"]:
-                        recommendation = f"- Asthma contributed {importance:.2f}% to your risk. Manage your asthma by following your treatment plan, avoiding asthma triggers, and using your medications as prescribed."
-                        feature_to_recommendation[feature] = recommendation
-                        final_features.append(feature)
-                    if feature == 'ever_told_you_had_a_depressive_disorder' and depressive_disorder == "yes":
-                        recommendation = f"- Depressive disorder contributed {importance:.2f}% to your risk. Consider seeking support from a mental health professional, practicing stress-reducing activities, and maintaining a healthy lifestyle to manage depressive symptoms."
-                        feature_to_recommendation[feature] = recommendation
-                        final_features.append(feature)
-                    if feature == 'difficulty_walking_or_climbing_stairs' and walking == "yes":
-                        recommendation = f"- Difficulty walking or climbing stairs contributed {importance:.2f}% to your risk. Consider consulting with a healthcare provider for appropriate interventions and exercises to improve mobility and strength."
-                        feature_to_recommendation[feature] = recommendation
-                        final_features.append(feature)
-                    if feature == 'length_of_time_since_last_routine_checkup' and length_of_time_since_last_routine_checkup != "past_year":
-                        recommendation = f"- Time since last routine checkup contributed {importance:.2f}% to your risk. Regular health checkups are important for early detection and management of health conditions. Schedule regular appointments with your healthcare provider to monitor and maintain your heart health."
-                        feature_to_recommendation[feature] = recommendation
-                        final_features.append(feature)
-                    if feature == 'could_not_afford_to_see_doctor' and could_not_afford_to_see_doctor == "yes":
-                        recommendation = f"- Difficulty affording to see a doctor contributed {importance:.2f}% to your risk. Explore community health services, sliding scale clinics, or health insurance options to ensure you have access to necessary medical care."
-                        feature_to_recommendation[feature] = recommendation
-                        final_features.append(feature)
-                    if feature == 'health_care_provider' and health_care_provider == "no":
-                        recommendation = f"- Not having a primary health care provider contributed {importance:.2f}% to your risk. Establishing a relationship with a primary care provider can help manage and prevent health issues. Consider finding a primary health care provider to ensure regular check-ups and consistent medical advice."
-                        feature_to_recommendation[feature] = recommendation
-                        final_features.append(feature)
-                    if feature == 'BMI' and bmi in ["overweight_bmi_25_to_29_9", "obese_bmi_30_or_more"]:
-                        recommendation = f"- BMI contributed {importance:.2f}% to your risk. Maintaining a healthy weight through a balanced diet and regular exercise can help reduce your risk of heart disease. Consider consulting a healthcare provider for personalized advice."
-                        feature_to_recommendation[feature] = recommendation
-                        final_features.append(feature)    
-
-                # Calculate the remaining contribution for "Other Factors"
-                total_importance = sum([feature_importance_df.loc[feature_importance_df['Feature'] == feature, 'Importance'].values[0] for feature in final_features])
-                other_factors_importance = 100 - total_importance
-
-                # Prepare data for the pie chart
-                pie_data = {
-                    'Feature': [feature_name_mapping[feature] for feature in final_features] + ['Other Factors'],
-                    'Importance': [feature_importance_df.loc[feature_importance_df['Feature'] == feature, 'Importance'].values[0] for feature in final_features] + [other_factors_importance]
-                }
-                pie_df = pd.DataFrame(pie_data)
-
-                # Create the pie chart
-                fig = px.pie(pie_df, names='Feature', values='Importance') #, title='Contribution to Heart Disease Risk'
-
-                # Display the pie chart
-                with row8_2:
-                    st.write("""
-                             #### Contribution to Heart Disease Risk
-                             """)
-                    st.plotly_chart(fig)
-
-                # Display recommendations in sorted order
-                sorted_recommendations = sorted([(feature, feature_to_recommendation[feature]) for feature in final_features], key=lambda x: feature_importance_df.loc[feature_importance_df['Feature'] == x[0], 'Importance'].values[0], reverse=True)
-                for feature, recommendation in sorted_recommendations:
-                    st.write(recommendation)
-            else:
-                st.write("Your risk of heart disease is low. Keep up the good work and continue to maintain a healthy lifestyle.")
-
-    except Exception as e:
-        row8_1.error(e)
-
-    st.write("""
-        ###### ***Disclaimer***
-        *This app is not a replacement for professional medical advice, diagnosis, or treatment. Always consult your doctor or a qualified healthcare provider with any questions you may have regarding your health.*
-    """)
-
+        st.markdown("---")

@@ -122,21 +122,27 @@ col1, col2 = st.columns(2)
 with col1:
     st.markdown("""
     <div class='section'>
-        <h3>💡 Disease Prediction</h3>
-        <p>Analyze symptoms and predict possible diseases using advanced AI models.</p>
+        <a href='/Disease_Prediction' style='text-decoration:none; color:inherit;'>
+            <h3>💡 Disease Prediction</h3>
+            <p>Analyze symptoms and predict possible diseases using advanced AI models.</p>
+        </a>
     </div>
 
     <div class='section'>
-        <h3>💊 Drug Recommendation</h3>
-        <p>Get AI-powered medication suggestions based on medical history and diagnosis.</p>
+        <a href='/Drug_Recommendation' style='text-decoration:none; color:inherit;'>
+            <h3>💊 Drug Recommendation</h3>
+            <p>Get AI-powered medication suggestions based on medical history and diagnosis.</p>
+        </a>
     </div>
     """, unsafe_allow_html=True)
 
 with col2:
     st.markdown("""
     <div class='section'>
-        <h3>❤️ Heart Disease Risk Assessment</h3>
-        <p>Assess your heart health and receive AI-powered risk analysis.</p>
+        <a href='/Heart_Risk' style='text-decoration:none; color:inherit;'>
+            <h3>❤️ Heart Disease Risk Assessment</h3>
+            <p>Assess your heart health and receive AI-powered risk analysis.</p>
+        </a>
     </div>
     """, unsafe_allow_html=True)
 
